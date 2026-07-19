@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p specs/001-family-tree-app/checklists)",
+      "Bash(cp .specify/templates/spec-template.md specs/001-family-tree-app/spec.md)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh --json --paths-only)",
+      "Bash(.specify/scripts/bash/setup-plan.sh --json)",
+      "Bash(.specify/scripts/bash/setup-tasks.sh --json)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(npm -v)",
+      "Bash(npm init *)",
+      "Bash(yarn -v)",
+      "Bash(yarn add *)",
+      "Bash(yarn config *)",
+      "Bash(npm config *)",
+      "Read(//Users/diepbv/**)",
+      "Bash(curl -sI https://registry.npmjs.org/react)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm audit *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

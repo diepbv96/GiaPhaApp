@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx playwright *)",
+      "Bash(node -e ' *)",
+      "Bash(grep -n '^\\\\.env$' .gitignore)"
+    ]
+  }
+}
