@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/*
+  Bright, high-contrast palette (FR-022) and relationship-type distinction (FR-023).
+  "Be Vietnam Pro" gives crisp Vietnamese diacritics (FR-026) at UI text sizes.
+*/
+@theme {
+  --font-sans: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+
+  --color-surface: #fffaf0;
+  --color-surface-raised: #ffffff;
+  --color-ink: #1f2933;
+  --color-ink-muted: #52606d;
+
+  --color-brand-50: #fff1e6;
+  --color-brand-100: #ffd9b3;
+  --color-brand-500: #e85d2a;
+  --color-brand-600: #c94716;
+  --color-brand-700: #9c3610;
+
+  --color-gold-400: #f4b73f;
+  --color-gold-500: #e0a012;
+  /* Decorative gold-500 is only ~2.3:1 on white — too low for WCAG AA text (4.5:1).
+     Use gold-700 for any gold-colored text; keep 400/500 for non-text accents. */
+  --color-gold-700: #8a5a05;
+
+  --color-gender-male: #2f7dd1;
+  --color-gender-female: #d1447d;
+  --color-gender-unknown: #6b7785;
+
+  --color-rel-parent-child: #2f855a;
+  --color-rel-spouse: #d1447d;
+  --color-rel-sibling: #a3720a;
+
+  --color-danger: #c53030;
+  --color-success: #2f855a;
+}
+
+html,
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
