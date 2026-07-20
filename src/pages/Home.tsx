@@ -86,6 +86,9 @@ export default function Home() {
             onChange={setHideInLaws}
           />
           {graph && <ExportButton viewportRef={viewportRef} />}
+          <SidebarItem icon="📅" to="/su-kien-sap-toi">
+            Sự kiện sắp tới
+          </SidebarItem>
         </SidebarSection>
 
         {canManage && graph && (
@@ -101,9 +104,14 @@ export default function Home() {
 
         <SidebarSection title="Tài khoản">
           {role === "admin" && (
-            <SidebarItem icon="🌳" to="/quan-tri/cay-gia-pha">
-              Quản lý cây gia phả
-            </SidebarItem>
+            <>
+              <SidebarItem icon="🌳" to="/quan-tri/cay-gia-pha">
+                Quản lý cây gia phả
+              </SidebarItem>
+              <SidebarItem icon="🔔" to="/quan-tri/thong-bao">
+                Cấu hình thông báo
+              </SidebarItem>
+            </>
           )}
           {isGuest ? (
             <SidebarItem icon="🔑" to="/dang-nhap">

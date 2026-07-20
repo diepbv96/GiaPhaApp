@@ -43,8 +43,38 @@ export interface Relationship {
 export interface FamilyTreeSummary {
   id: string;
   name: string;
+  slug: string;
   isDefault: boolean;
   isPublic: boolean;
+}
+
+/** A Gregorian date's lunar-calendar equivalent — see specs/002-lunar-events-tree-slugs/contracts/lunar-date-conversion.md. */
+export interface LunarDate {
+  day: number;
+  month: number;
+  year: number;
+  isLeapMonth: boolean;
+}
+
+export type LifeEventType = "birthday" | "death_anniversary";
+
+/** A recurring, yearly occurrence derived from a person's birth/death date — never persisted. */
+export interface LifeEvent {
+  type: LifeEventType;
+  individual: Individual;
+  day: number;
+}
+
+export interface EventNotificationConfig {
+  enabled: boolean;
+  template: string;
+  daysBefore: number;
+  defaultRecipients: string[];
+}
+
+export interface NotificationRecipientsOverride {
+  familyTreeId: string;
+  recipients: string[];
 }
 
 export interface TreeGraph {

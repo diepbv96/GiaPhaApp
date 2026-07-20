@@ -56,6 +56,45 @@ backend — see `specs/001-family-tree-app/` for the full spec, plan, and design
    npm run dev
    ```
 
+## Event-reminder emails (Edge Function)
+
+`supabase/functions/send-event-reminders/` sends one reminder email per upcoming
+birthday/death-anniversary that falls within the configured lead time (default 7
+days) — see `specs/002-lunar-events-tree-slugs/`. It's the only server-side code in
+this project; everything else is the frontend talking directly to Supabase.
+
+**One-time setup** (after applying migrations `0013`–`0015`, e.g. via `supabase db
+push` or `bootstrap.sql`):
+
+1. Deploy the function:
+
+   ```bash
+   supabase functions deploy send-event-reminders
+   ```
+
+2. Set its secrets (copy `supabase/functions/send-event-reminders/.env.example` to a
+   local `.env` first, fill in real values, then run):
+
+   ```bash
+   supabase secrets set --env-file supabase/functions/send-event-reminders/.env
+   ```
+
+   - `RESEND_API_KEY` — from [resend.com](https://resend.com); without it (or without
+     `EVENT_REMINDER_FROM_EMAIL`), the function still runs and logs sends but skips
+     the actual email `fetch` call, so it's safe to deploy before you have a provider.
+   - `EVENT_REMINDER_FROM_EMAIL` — must be a verified sender/domain in Resend.
+   - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the
+     Edge Function runtime — never set these yourself.
+
+3. Schedule it: Supabase Dashboard → **Edge Functions** → `send-event-reminders` →
+   **Cron** → add a daily trigger (any time of day; the function itself computes
+   "today" in Vietnam's UTC+7). This isn't expressible in `supabase/config.toml`, so
+   it has to be a one-time manual step per project.
+
+4. Turn reminders on: sign in as Admin → sidebar → **Cấu hình thông báo** → enable,
+   set the template/lead time/recipients, save. The function itself checks this
+   config on every run and does nothing while it's disabled.
+
 ## Scripts
 
 | Command | Purpose |
@@ -87,10 +126,13 @@ The workflow sets `BASE_PATH=/<repo-name>/` at build time so asset paths and the
 
 ## Project layout
 
-See `specs/001-family-tree-app/plan.md` ("Project Structure") for the full rationale.
-In short: `src/features/*` holds one folder per capability (tree rendering, individuals,
-relationships, import, export, auth, trees), `src/pages/*` are routed pages, and
-`supabase/migrations/*` is the database schema, applied in filename order.
+See `specs/001-family-tree-app/plan.md` and `specs/002-lunar-events-tree-slugs/plan.md`
+("Project Structure") for the full rationale. In short: `src/features/*` holds one
+folder per capability (tree rendering, individuals, relationships, import, export,
+auth, trees, events, notifications), `src/pages/*` are routed pages,
+`supabase/migrations/*` is the database schema (applied in filename order), and
+`supabase/functions/*` is the one Edge Function this project has (see "Event-reminder
+emails" above).
 
 ## Docs
 
@@ -103,3 +145,8 @@ relationships, import, export, auth, trees), `src/pages/*` are routed pages, and
 - [`supabase/bootstrap.sql`](supabase/bootstrap.sql) — one-shot schema + editable Admin account, for the Dashboard SQL Editor (CLI-free alternative to `supabase/migrations/`)
 - [`supabase/reset-admin-password.sql`](supabase/reset-admin-password.sql) — fixes an Admin account that won't sign in (repairs the password hash and the `auth.identities` row)
 - [`supabase/teardown.sql`](supabase/teardown.sql) — drops everything `bootstrap.sql` created (destructive) so you can re-run `bootstrap.sql` against a clean slate
+- [`specs/002-lunar-events-tree-slugs/spec.md`](specs/002-lunar-events-tree-slugs/spec.md) — lunar dates, Upcoming Events calendar + reminders, and shareable tree-slug URLs
+- [`specs/002-lunar-events-tree-slugs/plan.md`](specs/002-lunar-events-tree-slugs/plan.md) — implementation plan
+- [`specs/002-lunar-events-tree-slugs/data-model.md`](specs/002-lunar-events-tree-slugs/data-model.md) — database schema additions
+- [`specs/002-lunar-events-tree-slugs/contracts/`](specs/002-lunar-events-tree-slugs/contracts/) — lunar conversion, events calendar, tree-slug routing, and notification-config contracts
+- [`specs/002-lunar-events-tree-slugs/quickstart.md`](specs/002-lunar-events-tree-slugs/quickstart.md) — manual end-to-end validation scenarios

@@ -31,6 +31,7 @@ export interface RelationshipRow {
 export interface FamilyTreeRow {
   id: string;
   name: string;
+  slug: string;
   is_default: boolean;
   is_public: boolean;
 }
@@ -68,5 +69,5 @@ export function mapRelationshipRow(row: RelationshipRow): Relationship {
 }
 
 export function mapFamilyTreeRow(row: FamilyTreeRow): FamilyTreeSummary {
-  return { id: row.id, name: row.name, isDefault: row.is_default, isPublic: row.is_public };
+  return { id: row.id, name: row.name, slug: row.slug, isDefault: row.is_default, isPublic: row.is_public };
 }

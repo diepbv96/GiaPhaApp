@@ -12,7 +12,8 @@
 --      also want the bucket/files gone, delete them from Dashboard → Storage →
 --      avatars first.
 --   2. Drops every table this app created (family trees, individuals,
---      relationships, import history, profiles) — all rows in them are gone.
+--      relationships, import history, profiles, event-reminder config/log) — all
+--      rows in them are gone.
 --   3. Drops the functions/triggers/enum types those tables depended on, so
 --      `create table` / `create type` in bootstrap.sql won't fail with
 --      "already exists".
@@ -35,6 +36,11 @@ drop table if exists public.import_row_results cascade;
 drop table if exists public.import_batches cascade;
 drop table if exists public.relationships cascade;
 drop table if exists public.individuals cascade;
+-- Explicitly before family_trees: a FK-referencing table's own DROP CASCADE on the
+-- table it points to only drops the constraint, not the referencing table itself.
+drop table if exists public.family_tree_notification_recipients cascade;
+drop table if exists public.event_notification_log cascade;
+drop table if exists public.event_notification_config cascade;
 drop table if exists public.family_trees cascade;
 drop table if exists public.profiles cascade;
 
@@ -47,6 +53,9 @@ drop function if exists public.enforce_family_tree_limit() cascade;
 drop function if exists public.set_default_family_tree(uuid) cascade;
 drop function if exists public.set_updated_at() cascade;
 drop function if exists public.enforce_relationship_same_tree() cascade;
+drop function if exists public.slugify_tree_name(text) cascade;
+drop function if exists public.generate_unique_tree_slug(text, uuid) cascade;
+drop function if exists public.set_family_tree_slug_default() cascade;
 
 -- 4) Enum types (must go last — the functions/columns above depend on these)
 drop type if exists person_gender;
@@ -54,6 +63,7 @@ drop type if exists date_precision;
 drop type if exists relationship_type;
 drop type if exists user_role;
 drop type if exists import_row_status;
+drop type if exists life_event_type;
 
 -- 5) Every Auth account in this project — see the warning in the header comment.
 delete from auth.identities;

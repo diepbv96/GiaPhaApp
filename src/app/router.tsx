@@ -2,6 +2,9 @@ import { createBrowserRouter } from "react-router-dom";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import TreeManagement from "@/pages/Admin/TreeManagement";
+import NotificationSettings from "@/pages/Admin/NotificationSettings";
+import UpcomingEvents from "@/pages/UpcomingEvents";
+import TreeBySlug from "@/pages/TreeBySlug";
 import { RequireRole } from "@/features/auth/RequireRole";
 
 export const router = createBrowserRouter(
@@ -15,6 +18,12 @@ export const router = createBrowserRouter(
       element: <Home />,
     },
     {
+      // Same guest-visibility rule as "/" — a public tree's Upcoming Events calendar
+      // and lunar dates are visible without signing in (spec FR-021).
+      path: "/su-kien-sap-toi",
+      element: <UpcomingEvents />,
+    },
+    {
       // Admin-only tree management (create/delete trees, set default) — FR-020
       path: "/quan-tri/cay-gia-pha",
       element: (
@@ -22,6 +31,23 @@ export const router = createBrowserRouter(
           <TreeManagement />
         </RequireRole>
       ),
+    },
+    {
+      // Admin-only event-reminder settings (template, days-before, recipients) — FR-009–FR-011b
+      path: "/quan-tri/thong-bao",
+      element: (
+        <RequireRole allow={["admin"]}>
+          <NotificationSettings />
+        </RequireRole>
+      ),
+    },
+    {
+      // Any non-default tree, reached by its own slug (spec FR-017/FR-018). No
+      // RequireRole: TreeBySlug itself decides guest access based on `is_public`,
+      // same pattern as "/". React Router ranks static routes above this dynamic
+      // segment regardless of array order, so it never shadows the routes above.
+      path: "/:slug",
+      element: <TreeBySlug />,
     },
   ],
   // Matches Vite's `base` (set to "/<repo-name>/" by the GitHub Pages deploy workflow,

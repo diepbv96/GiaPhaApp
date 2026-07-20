@@ -16,6 +16,7 @@ declare
   v_grandfather_id uuid;
   v_grandmother_id uuid;
   v_father_id uuid;
+  v_second_tree_id uuid;
 begin
   -- Seed auth.users directly (standard local-dev pattern; the on_auth_user_created
   -- trigger from 0002_profiles.sql fires and creates a matching `profiles` row).
@@ -75,4 +76,31 @@ begin
     (v_tree_id, 'spouse', v_grandfather_id, v_grandmother_id),
     (v_tree_id, 'parent_child', v_grandfather_id, v_father_id),
     (v_tree_id, 'parent_child', v_grandmother_id, v_father_id);
+
+  -- Full-precision (day-level) dates on the father so the lunar-date display (US1) and
+  -- the Upcoming Events calendar (US2) have something concrete to show locally, without
+  -- changing any of the year-only demo dates above.
+  update public.individuals
+  set birth_date = '1955-03-12', birth_date_precision = 'day',
+      is_deceased = true, death_date = '2023-11-02', death_date_precision = 'day'
+  where id = v_father_id;
+
+  -- A second, non-default, public tree — reachable only via its slug URL (US3), never
+  -- shown on the home page. `slug` is left unset here on purpose: the
+  -- family_trees_slug_default trigger (0013_family_tree_slug.sql) generates it from the
+  -- name, the same as any tree created through the app.
+  insert into public.family_trees (name, is_default, is_public, created_by)
+  values ('Gia Phả Chi Nhánh Miền Nam (Mẫu)', false, true, v_admin_id)
+  returning id into v_second_tree_id;
+
+  insert into public.individuals (family_tree_id, full_name, gender, birth_date, birth_date_precision, created_by)
+  values (v_second_tree_id, 'Bùi Thị Út', 'female', '1962-09-08', 'day', v_admin_id);
+
+  -- Friendly demo values for the event-reminder settings (US2 Admin screen) — left
+  -- disabled so nothing actually sends without a deliberate opt-in and a configured
+  -- Resend API key (supabase/functions/send-event-reminders/.env.example).
+  update public.event_notification_config
+  set template = '{{ten_ca_nhan}} sẽ có {{loai_su_kien}} vào ngày {{ngay_duong}} ({{ngay_am}}), còn {{so_ngay_con_lai}} ngày nữa.',
+      default_recipients = array['admin@giapha.test']
+  where id = '00000000-0000-0000-0000-000000000000';
 end $$;

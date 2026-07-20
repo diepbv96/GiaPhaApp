@@ -10,6 +10,7 @@ import {
 } from "@/features/trees/treeService";
 import { Modal } from "@/app/Modal";
 import { useToast } from "@/app/ToastProvider";
+import { SlugField } from "@/features/trees/SlugField";
 import type { FamilyTreeSummary } from "@/types";
 
 const MAX_TREES = 5;
@@ -22,6 +23,7 @@ export default function TreeManagement() {
   const [newTreeName, setNewTreeName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FamilyTreeSummary | null>(null);
+  const [slugEditTarget, setSlugEditTarget] = useState<FamilyTreeSummary | null>(null);
 
   const treesQuery = useQuery({ queryKey: ["family-trees", "all"], queryFn: getFamilyTrees });
 
@@ -158,6 +160,9 @@ export default function TreeManagement() {
                     <p className="truncate text-base font-semibold text-[var(--color-ink)]" title={tree.name}>
                       {tree.name}
                     </p>
+                    <p className="truncate font-mono text-xs text-[var(--color-ink-muted)]" title={tree.slug}>
+                      /{tree.slug}
+                    </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {tree.isDefault && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -194,6 +199,13 @@ export default function TreeManagement() {
                       className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-brand-50)] disabled:opacity-60"
                     >
                       {tree.isPublic ? "🔒 Chuyển về riêng tư" : "🌐 Công khai"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSlugEditTarget(tree)}
+                      className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-brand-50)]"
+                    >
+                      ✏️ Sửa slug
                     </button>
                     <button
                       type="button"
@@ -244,6 +256,17 @@ export default function TreeManagement() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {slugEditTarget && (
+        <Modal title={`Sửa slug — ${slugEditTarget.name}`} onClose={() => setSlugEditTarget(null)}>
+          <SlugField
+            treeId={slugEditTarget.id}
+            currentSlug={slugEditTarget.slug}
+            onCancel={() => setSlugEditTarget(null)}
+            onSaved={() => setSlugEditTarget(null)}
+          />
         </Modal>
       )}
 

@@ -15,6 +15,9 @@ export default tseslint.config(
       "node_modules/**",
       "supabase/.branches/**",
       "supabase/.temp/**",
+      // Deno Edge Function runtime code — typechecked/linted by `deno check`/`deno lint`,
+      // not this Vite/Node TypeScript config (uses Deno-only globals like `Deno.serve`).
+      "supabase/functions/**",
     ],
   },
   {

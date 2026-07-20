@@ -5,8 +5,9 @@
 -- Use this INSTEAD of the Supabase CLI (supabase db push) if you'd rather just
 -- paste one script into Dashboard > SQL Editor > New query on a brand-new
 -- Supabase project. It is the concatenation of everything in
--- supabase/migrations/0001..0010 (schema, constraints, triggers, RLS policies,
--- the avatars storage bucket) followed by a single editable Admin account.
+-- supabase/migrations/0001..0015 (schema, constraints, triggers, RLS policies,
+-- the avatars storage bucket, family tree slugs, event-reminder config/log) followed
+-- by a single editable Admin account.
 --
 -- >>> BEFORE RUNNING: scroll to the bottom "Admin user" section and change
 -- >>> the email/password there. Do not run this twice against the same
@@ -451,6 +452,174 @@ update public.individuals set is_deceased = true where death_date is not null;
 
 alter table public.individuals
   add column sibling_order integer;
+
+
+-- ---------------------------------------------------------------------------
+-- source: supabase/migrations/0013_family_tree_slug.sql
+-- ---------------------------------------------------------------------------
+-- Family tree slugs (data-model.md "family_trees (existing table, extended)") —
+-- spec FR-014/FR-015/FR-019: unique, URL-safe, auto-generated from name, admin-editable,
+-- and every pre-existing tree gets one during this migration with no manual step.
+
+create extension if not exists unaccent with schema extensions;
+
+-- Lowercases, strips diacritics (incl. Vietnamese "đ", which `unaccent` alone does not
+-- touch since it's a distinct Latin letter, not a combining-mark accented vowel), and
+-- collapses everything else into hyphens. See contracts/tree-slug-routing.md.
+create function public.slugify_tree_name(input text)
+returns text
+language sql
+immutable
+as $$
+  select trim(
+    both '-' from
+    regexp_replace(extensions.unaccent(replace(lower(input), 'đ', 'd')), '[^a-z0-9]+', '-', 'g')
+  );
+$$;
+
+-- Appends the next available numeric suffix (-2, -3, ...) on a collision, so callers
+-- never have to retry themselves at the database level (spec Assumptions).
+create function public.generate_unique_tree_slug(tree_name text, exclude_id uuid default null)
+returns text
+language plpgsql
+as $$
+declare
+  base_slug text := public.slugify_tree_name(tree_name);
+  candidate text;
+  suffix int := 1;
+begin
+  if base_slug = '' then
+    base_slug := 'cay-gia-pha';
+  end if;
+  candidate := base_slug;
+
+  while exists (
+    select 1 from public.family_trees
+    where slug = candidate and (exclude_id is null or id <> exclude_id)
+  ) loop
+    suffix := suffix + 1;
+    candidate := base_slug || '-' || suffix;
+  end loop;
+
+  return candidate;
+end;
+$$;
+
+alter table public.family_trees add column slug text;
+
+-- Backfill: one deterministic pass, oldest tree first, so collisions between
+-- existing trees resolve the same way every time this migration is (re-)applied.
+do $$
+declare
+  r record;
+begin
+  for r in select id, name from public.family_trees order by created_at loop
+    update public.family_trees
+    set slug = public.generate_unique_tree_slug(r.name, r.id)
+    where id = r.id;
+  end loop;
+end $$;
+
+alter table public.family_trees
+  alter column slug set not null,
+  add constraint family_trees_slug_format check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  add constraint family_trees_slug_unique unique (slug);
+
+-- Safety net for any insert path that doesn't supply a slug itself (spec FR-014):
+-- the client is expected to generate + retry-on-conflict (contracts/tree-slug-routing.md),
+-- but a tree can never end up without one even if that step is skipped.
+create function public.set_family_tree_slug_default()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.slug is null or new.slug = '' then
+    new.slug := public.generate_unique_tree_slug(new.name, new.id);
+  end if;
+  return new;
+end;
+$$;
+
+create trigger family_trees_slug_default
+  before insert on public.family_trees
+  for each row execute function public.set_family_tree_slug_default();
+
+-- No new RLS policy needed: `slug` is just another column on `family_trees`, already
+-- covered by the existing admin-only write / any-authenticated-or-public-guest read
+-- policies from 0007_rls_policies.sql and 0009_public_tree_access.sql.
+
+-- ---------------------------------------------------------------------------
+-- source: supabase/migrations/0014_event_notification_config.sql
+-- ---------------------------------------------------------------------------
+-- Event notification configuration (data-model.md "event_notification_config" /
+-- "family_tree_notification_recipients"). A single, application-wide settings row
+-- (template, days-before, default recipients) plus an optional per-tree recipient
+-- override — spec FR-009–FR-011b, Clarifications 2026-07-20.
+
+create table public.event_notification_config (
+  id uuid primary key default '00000000-0000-0000-0000-000000000000',
+  enabled boolean not null default false,
+  template text not null default '',
+  days_before integer not null default 7 check (days_before >= 0),
+  default_recipients text[] not null default '{}',
+  updated_by uuid references public.profiles (id),
+  updated_at timestamptz not null default now(),
+  -- Fixed id + primary key together guarantee exactly one row ever exists (a true
+  -- singleton) without needing a separate partial-unique-index trick.
+  constraint event_notification_config_is_singleton check (id = '00000000-0000-0000-0000-000000000000')
+);
+
+insert into public.event_notification_config (id) values ('00000000-0000-0000-0000-000000000000');
+
+create table public.family_tree_notification_recipients (
+  family_tree_id uuid primary key references public.family_trees (id) on delete cascade,
+  recipients text[] not null,
+  updated_by uuid references public.profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.event_notification_config enable row level security;
+alter table public.family_tree_notification_recipients enable row level security;
+
+-- Admin-only in both directions: these settings control outgoing email and, via
+-- default_recipients/recipients, contain other people's email addresses — never
+-- exposed to editor/viewer/anon (data-model.md RLS table).
+create policy event_notification_config_admin_only on public.event_notification_config
+  for all to authenticated
+  using (public.current_role_is(array['admin']::user_role[]))
+  with check (public.current_role_is(array['admin']::user_role[]));
+
+create policy family_tree_notification_recipients_admin_only on public.family_tree_notification_recipients
+  for all to authenticated
+  using (public.current_role_is(array['admin']::user_role[]))
+  with check (public.current_role_is(array['admin']::user_role[]));
+
+-- ---------------------------------------------------------------------------
+-- source: supabase/migrations/0015_event_notification_log.sql
+-- ---------------------------------------------------------------------------
+-- Send-once guarantee for the reminder Edge Function (data-model.md
+-- "event_notification_log") — spec FR-013: never send a duplicate reminder for the
+-- same event occurrence.
+
+create type life_event_type as enum ('birthday', 'death_anniversary');
+
+create table public.event_notification_log (
+  id uuid primary key default gen_random_uuid(),
+  individual_id uuid not null references public.individuals (id) on delete cascade,
+  event_type life_event_type not null,
+  event_year integer not null,
+  sent_at timestamptz not null default now(),
+  -- The dedupe check the Edge Function relies on before sending (contracts/event-notification-config.md).
+  unique (individual_id, event_type, event_year)
+);
+
+alter table public.event_notification_log enable row level security;
+
+-- Admin may view send history; nobody (not even Admin) writes via the client API —
+-- only the Edge Function does, using the service-role key, which bypasses RLS.
+create policy event_notification_log_admin_select on public.event_notification_log
+  for select to authenticated
+  using (public.current_role_is(array['admin']::user_role[]));
 
 -- =============================================================================
 -- Admin user — EDIT the email/password below before running this file

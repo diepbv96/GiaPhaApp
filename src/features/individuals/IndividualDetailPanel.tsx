@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Individual, TreeGraph } from "@/types";
 import { formatPartialDate, genderLabel, siblingOrderLabel } from "@/lib/formatters";
 import { getFamilyRelations, spouseRoleLabel } from "@/features/individuals/familyRelations";
+import { LunarDateBadge } from "@/features/individuals/LunarDateBadge";
 
 export interface IndividualDetailPanelProps {
   individual: Individual | null;
@@ -128,12 +129,18 @@ export function IndividualDetailPanel({
       <div className="flex-1 overflow-y-auto p-4">
         <dl className="grid grid-cols-3 gap-y-2 text-sm">
           <dt className="col-span-1 font-medium text-[var(--color-ink-muted)]">Ngày sinh</dt>
-          <dd className="col-span-2">{formatPartialDate(individual.birthDate)}</dd>
+          <dd className="col-span-2">
+            {formatPartialDate(individual.birthDate)}
+            <LunarDateBadge date={individual.birthDate} />
+          </dd>
 
           {individual.isDeceased && (
             <>
               <dt className="col-span-1 font-medium text-[var(--color-ink-muted)]">Ngày mất</dt>
-              <dd className="col-span-2">{formatPartialDate(individual.deathDate)}</dd>
+              <dd className="col-span-2">
+                {formatPartialDate(individual.deathDate)}
+                <LunarDateBadge date={individual.deathDate} />
+              </dd>
             </>
           )}
         </dl>
