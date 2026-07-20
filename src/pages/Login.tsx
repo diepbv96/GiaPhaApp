@@ -32,7 +32,7 @@ export default function Login() {
         className="w-full max-w-sm rounded-2xl bg-[var(--color-surface-raised)] p-8 shadow-lg"
       >
         <h1 className="mb-1 text-2xl font-semibold text-[var(--color-brand-700)]">
-          Gia Phả Dòng Họ Bùi
+          Gia Phả App
         </h1>
         <p className="mb-6 text-sm text-[var(--color-ink-muted)]">
           Đăng nhập để xem và quản lý cây gia phả.

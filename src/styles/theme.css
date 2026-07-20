@@ -28,6 +28,14 @@
   --color-gender-female: #d1447d;
   --color-gender-unknown: #6b7785;
 
+  /* Person card living/deceased treatment (004-tree-display-customization FR-001) —
+     border colors stay the primary distinguishing signal so status reads clearly even
+     against an arbitrary visitor-chosen canvas background, not just the fill color. */
+  --color-card-living-border: #2f855a;
+  --color-card-living-bg: #ffffff;
+  --color-card-deceased-border: #52606d;
+  --color-card-deceased-bg: #e4e7eb;
+
   --color-rel-parent-child: #2f855a;
   --color-rel-spouse: #d1447d;
   --color-rel-sibling: #a3720a;

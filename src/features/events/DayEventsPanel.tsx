@@ -1,5 +1,3 @@
-import { toLunarDate } from "@/lib/lunarCalendar";
-import { formatLunarDate } from "@/features/individuals/LunarDateBadge";
 import type { LifeEvent, LifeEventType } from "@/types";
 
 const EVENT_TYPE_LABEL: Record<LifeEventType, string> = {
@@ -8,30 +6,20 @@ const EVENT_TYPE_LABEL: Record<LifeEventType, string> = {
 };
 
 export interface DayEventsPanelProps {
-  day: number | null;
-  month: number;
-  year: number;
+  day: number;
   eventsByDay: Map<number, LifeEvent[]>;
   onSelectIndividual?: (individualId: string) => void;
 }
 
-/** Shows every Life Event matching the selected day, or an explicit "no events"
- * message when none match (spec FR-007) — never a blank/ambiguous panel. */
-export function DayEventsPanel({ day, month, year, eventsByDay, onSelectIndividual }: DayEventsPanelProps) {
-  if (day === null) {
-    return <p className="text-sm text-[var(--color-ink-muted)]">Chọn một ngày trên lịch để xem chi tiết.</p>;
-  }
-
+/** Shows every Life Event matching `day`, or an explicit "no events" message when
+ * none match (spec FR-007) — never a blank/ambiguous panel. Only ever rendered while
+ * a day is selected, inside the popup that hosts it (`UpcomingEvents.tsx`), which
+ * carries the date heading as its own title — this panel is the body only. */
+export function DayEventsPanel({ day, eventsByDay, onSelectIndividual }: DayEventsPanelProps) {
   const events = eventsByDay.get(day) ?? [];
-  const lunar = toLunarDate({ day, month, year });
 
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-[var(--color-ink)]">
-        Ngày {day} tháng {month} năm {year}
-        {lunar && <span className="ml-1 font-normal text-[var(--color-ink-muted)]">({formatLunarDate(lunar)})</span>}
-      </h3>
-
       {events.length === 0 ? (
         <p className="text-sm text-[var(--color-ink-muted)]">Không có sự kiện nào vào ngày này.</p>
       ) : (

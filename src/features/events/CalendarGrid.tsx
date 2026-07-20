@@ -56,13 +56,13 @@ export function CalendarGrid({ month, year, eventsByDay, selectedDay, onSelectDa
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-[var(--color-ink-muted)]">
+      <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-[var(--color-ink-muted)]">
         {WEEKDAY_LABELS.map((label) => (
           <div key={label}>{label}</div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-2">
         {cells.map((day, index) => {
           if (day === null) {
             return <div key={`blank-${index}`} className="aspect-square rounded-lg" />;
@@ -80,7 +80,7 @@ export function CalendarGrid({ month, year, eventsByDay, selectedDay, onSelectDa
               onClick={() => onSelectDay(day)}
               aria-pressed={isSelected}
               aria-label={hasEvents ? `Ngày ${day}, có ${events.length} sự kiện` : `Ngày ${day}, không có sự kiện`}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs transition ${
+              className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border text-sm transition ${
                 isSelected
                   ? "border-[var(--color-brand-600)] bg-[var(--color-brand-100)]"
                   : hasEvents
@@ -88,8 +88,8 @@ export function CalendarGrid({ month, year, eventsByDay, selectedDay, onSelectDa
                     : "border-transparent hover:bg-[var(--color-brand-50)]"
               }`}
             >
-              <span className="text-sm font-semibold text-[var(--color-ink)]">{day}</span>
-              <span className="text-[10px] text-[var(--color-ink-muted)]">
+              <span className="text-lg font-semibold text-[var(--color-ink)]">{day}</span>
+              <span className="text-xs text-[var(--color-ink-muted)]">
                 {lunar ? `${lunar.day}/${lunar.month}${lunar.isLeapMonth ? "N" : ""}` : "—"}
               </span>
               {hasEvents && <span aria-hidden="true">🎉</span>}

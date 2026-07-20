@@ -16,17 +16,25 @@ const genderBorderColor: Record<Individual["gender"], string> = {
   unknown: "var(--color-gender-unknown)",
 };
 
+// Living/deceased is the card-level signal now (004-tree-display-customization
+// FR-001); gender moved to the avatar's border (FR-002) — see genderBorderColor above.
+const cardStatusStyle: Record<"living" | "deceased", { border: string; background: string }> = {
+  living: { border: "var(--color-card-living-border)", background: "var(--color-card-living-bg)" },
+  deceased: { border: "var(--color-card-deceased-border)", background: "var(--color-card-deceased-bg)" },
+};
+
 // Fixed size (kept in sync with useTreeLayout's CARD_WIDTH/CARD_HEIGHT) so every card
 // lines up in the grid regardless of how long a name is or whether it has children —
 // the card only ever shows the avatar and full name; everything else lives in the
 // detail panel.
 export function IndividualNode({ data }: NodeProps & { data: IndividualNodeData }) {
   const { individual, hasChildren, collapsed, onToggleCollapse, onSelect } = data;
+  const statusStyle = cardStatusStyle[individual.isDeceased ? "deceased" : "living"];
 
   return (
     <div
-      className="relative flex h-[150px] w-[200px] cursor-pointer flex-col items-center justify-between rounded-xl bg-[var(--color-surface-raised)] p-3 text-center shadow-md transition hover:shadow-lg"
-      style={{ borderTop: `4px solid ${genderBorderColor[individual.gender]}` }}
+      className="relative flex h-[150px] w-[200px] cursor-pointer flex-col items-center justify-between rounded-xl p-3 text-center shadow-md transition hover:shadow-lg"
+      style={{ border: `2px solid ${statusStyle.border}`, backgroundColor: statusStyle.background }}
       onClick={() => onSelect(individual.id)}
     >
       {individual.siblingOrder !== undefined && (
@@ -48,6 +56,7 @@ export function IndividualNode({ data }: NodeProps & { data: IndividualNodeData 
       <div className="flex flex-col items-center">
         <div
           className="mb-2 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[var(--color-brand-50)] text-lg font-semibold text-[var(--color-brand-600)]"
+          style={{ border: `3px solid ${genderBorderColor[individual.gender]}` }}
           aria-hidden
         >
           {individual.avatarUrl ? (

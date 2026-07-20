@@ -31,7 +31,9 @@ test.describe("User Story 1 - Lunar dates in person detail", () => {
     await expect(page.getByRole("complementary", { name: "Thông tin cá nhân" })).toBeVisible();
 
     const panel = page.getByRole("complementary", { name: "Thông tin cá nhân" });
-    await expect(panel.getByText("âm lịch")).toHaveCount(2); // one for birth date, one for death date
+    // Inline "DD/MM/YYYY AL" format (specs/003-events-calendar-ui-refinements) — one
+    // for the birth date, one for the death date.
+    await expect(panel.getByText(/\(\d{2}\/\d{2}\/\d{4} AL\)/)).toHaveCount(2);
   });
 
   test("a year-only birth date shows no lunar date, just an unavailable note", async ({ page }) => {
@@ -39,7 +41,7 @@ test.describe("User Story 1 - Lunar dates in person detail", () => {
 
     await page.getByText("Bùi Văn Tổ").first().click();
     const panel = page.getByRole("complementary", { name: "Thông tin cá nhân" });
-    await expect(panel.getByText("Không xác định được ngày âm lịch")).toBeVisible();
+    await expect(panel.getByText("(không rõ ngày âm lịch)")).toBeVisible();
   });
 });
 
@@ -58,10 +60,15 @@ test.describe("User Story 2 - Upcoming Events calendar", () => {
     }
     await expect(page.getByRole("heading", { name: /Tháng 3 năm \d+/ })).toBeVisible();
 
+    // Selecting a date opens a popup over the (now full-width) calendar rather than a
+    // permanent side panel (specs/003-events-calendar-ui-refinements).
     const day12 = page.getByRole("button", { name: /Ngày 12, có \d+ sự kiện/ });
     await expect(day12).toBeVisible();
     await day12.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByText("Sinh nhật")).toBeVisible();
+    await page.getByRole("button", { name: "✕" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     const day1 = page.getByRole("button", { name: "Ngày 1, không có sự kiện" });
     await day1.click();
@@ -130,5 +137,65 @@ test.describe("User Story 3 - Shareable tree URLs", () => {
     await page.goto("/gia-pha-chi-nhanh-mien-nam-mau");
     await page.goto("/");
     await expect(page.getByText("Gia Phả Dòng Họ Bùi (Mẫu)")).toBeVisible();
+  });
+});
+
+// specs/003-events-calendar-ui-refinements
+test.describe("003 US1 - Full navigation and management via slug URL", () => {
+  test("admin gets the same sidebar and can manage individuals on a slug-viewed, non-default tree", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+    await page.goto("/gia-pha-chi-nhanh-mien-nam-mau");
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+
+    // Same sidebar as the home screen: viewing options, management section, account.
+    await expect(page.getByRole("link", { name: "Sự kiện sắp tới" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Thêm cá thể" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Thêm cá thể" }).click();
+    await page.getByLabel("Họ tên *").fill("Playwright Slug Test Person");
+    await page.getByRole("button", { name: "Lưu" }).click();
+    await expect(page.getByText("Playwright Slug Test Person")).toBeVisible();
+
+    await page.getByText("Playwright Slug Test Person").first().click();
+    await page.getByRole("button", { name: "Xoá cá thể" }).click();
+    await page.getByRole("button", { name: "Xoá" }).click();
+    await expect(page.getByText("Playwright Slug Test Person")).toHaveCount(0);
+  });
+
+  test("viewer sees the slug-viewed tree's sidebar but no management controls", async ({ page }) => {
+    await signIn(page, ACCOUNTS.viewer);
+    await page.goto("/gia-pha-chi-nhanh-mien-nam-mau");
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+
+    await expect(page.getByRole("link", { name: "Sự kiện sắp tới" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Thêm cá thể" })).toHaveCount(0);
+  });
+
+  test("Upcoming Events reached from a slug-viewed tree shows that tree's own events", async ({ page }) => {
+    await signIn(page, ACCOUNTS.viewer);
+    await page.goto("/gia-pha-chi-nhanh-mien-nam-mau");
+    await page.getByRole("link", { name: "Sự kiện sắp tới" }).click();
+    await expect(page).toHaveURL(/\/gia-pha-chi-nhanh-mien-nam-mau\/su-kien-sap-toi$/);
+
+    const now = new Date();
+    const monthsToSeptember = (9 - (now.getMonth() + 1) + 12) % 12;
+    for (let i = 0; i < monthsToSeptember; i++) {
+      await page.getByRole("button", { name: "Tháng sau" }).click();
+    }
+    await expect(page.getByRole("button", { name: /Ngày 8, có \d+ sự kiện/ })).toBeVisible();
+  });
+});
+
+test.describe("003 US4 - Copy updates", () => {
+  test("the in-laws toggle and the app's generic name use the updated wording", async ({ page }) => {
+    await expect(page).toHaveTitle("Gia Phả App");
+
+    await page.goto("/dang-nhap");
+    await expect(page.getByRole("heading", { name: "Gia Phả App" })).toBeVisible();
+
+    await signIn(page, ACCOUNTS.viewer);
+    await expect(page.getByText("Ẩn dâu/rễ")).toBeVisible();
   });
 });

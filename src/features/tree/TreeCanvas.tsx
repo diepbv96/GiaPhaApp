@@ -20,10 +20,13 @@ export interface TreeCanvasProps {
   onNodePositionChange?: (individualId: string, position: { x: number; y: number }) => void;
   /** When true, hides every married-in individual, showing only blood relatives. */
   hideInLaws?: boolean;
+  /** Visitor's session-scoped background color preference (004-tree-display-customization
+   * FR-005–FR-007); `undefined` leaves the canvas at its default appearance. */
+  backgroundColor?: string;
 }
 
 export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function TreeCanvas(
-  { graph, onSelectIndividual, canDrag = false, onNodePositionChange, hideInLaws = false },
+  { graph, onSelectIndividual, canDrag = false, onNodePositionChange, hideInLaws = false, backgroundColor },
   ref,
 ) {
   // spec.md US2 acceptance scenario 1: a newly created individual only appears on the
@@ -168,7 +171,7 @@ export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function T
   };
 
   return (
-    <div ref={ref} className="h-full w-full" data-testid="tree-canvas">
+    <div ref={ref} className="h-full w-full" data-testid="tree-canvas" style={{ backgroundColor }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

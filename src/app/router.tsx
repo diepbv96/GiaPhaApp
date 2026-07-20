@@ -42,6 +42,15 @@ export const router = createBrowserRouter(
       ),
     },
     {
+      // Same guest-visibility rule as "/su-kien-sap-toi" above, scoped to the
+      // slug-named tree instead of the default one (spec FR-001). Declared before the
+      // "/:slug" catch-all below so it's unambiguous which route a two-segment URL
+      // matches, even though React Router's own ranking already prefers the more
+      // specific route regardless of array order.
+      path: "/:slug/su-kien-sap-toi",
+      element: <UpcomingEvents />,
+    },
+    {
       // Any non-default tree, reached by its own slug (spec FR-017/FR-018). No
       // RequireRole: TreeBySlug itself decides guest access based on `is_public`,
       // same pattern as "/". React Router ranks static routes above this dynamic
