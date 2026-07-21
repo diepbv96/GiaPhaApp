@@ -245,3 +245,179 @@ test.describe("Spec 008 - Isolated individuals remain visible and actionable", (
     await expect(page.getByRole("button", { name: "Xoá cá thể" })).toHaveCount(0);
   });
 });
+
+// specs/009-cross-tree-relationships/quickstart.md
+//
+// Reuses the seeded second tree ("Gia Phả Chi Nhánh Miền Nam (Mẫu)") as "tree 2" for
+// every test below instead of creating a new one — both seeded trees are already public
+// (supabase/seed/seed.sql), so this also gives the guest-parity check a public tree to
+// view with no is_public toggling needed, and avoids ever approaching the app's 5-tree
+// limit (0003_family_trees.sql) under this project's `fullyParallel: true` config. Each
+// test still creates and cleans up its own uniquely-named individuals, never touching the
+// seeded ones.
+const SECOND_TREE_NAME = "Gia Phả Chi Nhánh Miền Nam (Mẫu)";
+
+async function getSecondTreeSlug(page: Page): Promise<string> {
+  const slug = await page.evaluate(async (name) => {
+    const { supabase } = await import("/src/lib/supabase.ts");
+    const { data } = await supabase.from("family_trees").select("slug").eq("name", name).single();
+    return data?.slug ?? null;
+  }, SECOND_TREE_NAME);
+  expect(slug).not.toBeNull();
+  return slug as string;
+}
+
+async function createIndividual(page: Page, fullName: string) {
+  await page.getByRole("button", { name: "+ Thêm cá thể" }).click();
+  await page.getByLabel("Họ tên *").fill(fullName);
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+async function createSpouseRelationship(page: Page, personAName: string, personBName: string) {
+  await page.getByText(personAName).first().click();
+  await page.getByRole("button", { name: "Thêm mối quan hệ" }).click();
+  await page.getByLabel("Loại quan hệ").selectOption("spouse");
+  await page.getByLabel("Cá thể thứ nhất").selectOption({ label: personAName });
+  await page.getByLabel("Cá thể thứ hai").selectOption({ label: personBName });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+async function addToSecondTree(page: Page, fullName: string) {
+  await page.getByText(fullName).first().click();
+  await page.getByRole("button", { name: "Thêm vào cây gia phả khác" }).click();
+  await page.locator("li", { hasText: SECOND_TREE_NAME }).getByRole("button", { name: "Thêm vào cây này" }).click();
+  await page.getByRole("button", { name: "Đóng" }).click();
+}
+
+/** Deletes an individual system-wide from wherever it's currently visible, confirming
+ * the relationship-cascade checkbox only if it's shown (spec 007's `deleteIndividual` is
+ * always a full, every-tree delete). */
+async function deleteIndividualEverywhere(page: Page, fullName: string) {
+  await page.getByText(fullName).first().click();
+  await page.getByRole("button", { name: "Xoá cá thể" }).click();
+  const cascadeCheckbox = page.getByText("Tôi hiểu và muốn xoá cả các mối quan hệ liên quan");
+  if (await cascadeCheckbox.count() > 0) {
+    await cascadeCheckbox.click();
+  }
+  await page.getByRole("button", { name: "Xoá" }).click();
+}
+
+test.describe("Spec 009 - Cross-tree relationship visibility", () => {
+  test("a relationship recorded in tree 1 becomes visible in tree 2 once both individuals are added there, for both authenticated users and guests (FR-001/FR-002/US1)", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+    const secondTreeSlug = await getSecondTreeSlug(page);
+
+    const nameA = "Playwright CrossTree A";
+    const nameB = "Playwright CrossTree B";
+    await createIndividual(page, nameA);
+    await createIndividual(page, nameB);
+    await createSpouseRelationship(page, nameA, nameB);
+
+    await addToSecondTree(page, nameA);
+    await addToSecondTree(page, nameB);
+
+    // Tree 2: the relationship must appear without being recreated.
+    await page.goto(`/${secondTreeSlug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardAInTree2 = page.locator(".react-flow__node", { hasText: nameA });
+    await expect(cardAInTree2.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+    await cardAInTree2.click();
+    await page.getByRole("button", { name: /Gia đình/ }).click();
+    await expect(page.getByRole("complementary", { name: "Thông tin cá nhân" }).getByRole("button", { name: nameB })).toBeVisible();
+
+    // Tree 1 (default): still shown exactly as before.
+    await page.goto("/");
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardAInTree1 = page.locator(".react-flow__node", { hasText: nameA });
+    await expect(cardAInTree1.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+
+    // Guest parity: an unauthenticated viewer of the public tree 2 sees the same thing.
+    await page.getByRole("button", { name: "Đăng xuất" }).click();
+    await page.goto(`/${secondTreeSlug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardAAsGuest = page.locator(".react-flow__node", { hasText: nameA });
+    await expect(cardAAsGuest.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+
+    // Cleanup — sign back in and delete both (cascades the relationship, all trees).
+    await signIn(page, ACCOUNTS.admin);
+    await deleteIndividualEverywhere(page, nameA);
+    await deleteIndividualEverywhere(page, nameB);
+  });
+
+  test("a relationship stays hidden in tree 2 until both individuals are members (FR-004/US2)", async ({ page }) => {
+    await signIn(page, ACCOUNTS.admin);
+    const secondTreeSlug = await getSecondTreeSlug(page);
+
+    const nameC = "Playwright CrossTree C";
+    const nameD = "Playwright CrossTree D";
+    await createIndividual(page, nameC);
+    await createIndividual(page, nameD);
+    await createSpouseRelationship(page, nameC, nameD);
+
+    // Only C is added to tree 2.
+    await addToSecondTree(page, nameC);
+
+    await page.goto(`/${secondTreeSlug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardCInTree2 = page.locator(".react-flow__node", { hasText: nameC });
+    await expect(cardCInTree2.getByText("Chưa có mối quan hệ")).toBeVisible();
+    await expect(page.getByText(nameD)).toHaveCount(0);
+
+    // Adding D too makes the relationship appear immediately.
+    await addToSecondTree(page, nameD);
+    await page.goto(`/${secondTreeSlug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardCInTree2Again = page.locator(".react-flow__node", { hasText: nameC });
+    await expect(cardCInTree2Again.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+
+    await deleteIndividualEverywhere(page, nameC);
+    await deleteIndividualEverywhere(page, nameD);
+  });
+
+  test("removing a shared membership from tree 2 doesn't affect the relationship still valid in tree 1 (FR-006/US3)", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+    const secondTreeSlug = await getSecondTreeSlug(page);
+
+    const nameE = "Playwright CrossTree E";
+    const nameF = "Playwright CrossTree F";
+    await createIndividual(page, nameE);
+    await createIndividual(page, nameF);
+    await createSpouseRelationship(page, nameE, nameF);
+
+    await addToSecondTree(page, nameE);
+    await addToSecondTree(page, nameF);
+
+    // Remove E's membership from tree 2 only — must succeed directly, with no
+    // relationship-cascade confirmation prompt, since the relationship was recorded in
+    // tree 1 (the default tree), not tree 2 (research.md §4).
+    await page.getByText(nameE).first().click();
+    await page.getByRole("button", { name: "Thêm vào cây gia phả khác" }).click();
+    await page.locator("li", { hasText: SECOND_TREE_NAME }).getByRole("button", { name: "Xoá khỏi cây này" }).click();
+    // If removal were blocked (it shouldn't be — research.md §4), the same <li> would
+    // persist showing the cascade-confirmation prompt instead of disappearing, so this
+    // single assertion both waits for the mutation to settle and verifies the outcome.
+    await expect(page.locator("li", { hasText: SECOND_TREE_NAME })).toHaveCount(0);
+    await page.getByRole("button", { name: "Đóng" }).click();
+
+    // Tree 1: relationship between E and F is unchanged.
+    await page.goto("/");
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    const cardEInTree1 = page.locator(".react-flow__node", { hasText: nameE });
+    await expect(cardEInTree1.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+
+    // Tree 2: E is gone entirely; F remains (still a member).
+    await page.goto(`/${secondTreeSlug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(nameE)).toHaveCount(0);
+    await expect(page.getByText(nameF)).toBeVisible();
+
+    await deleteIndividualEverywhere(page, nameE);
+    await deleteIndividualEverywhere(page, nameF);
+  });
+});
