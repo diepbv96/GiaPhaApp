@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   clearRecipientOverride,
+  DEFAULT_EVENT_REMINDER_TEMPLATE,
   getConfig,
   getRecipientOverride,
   setRecipientOverride,
@@ -34,7 +35,9 @@ function ConfigForm({ config }: { config: EventNotificationConfig }) {
   // ever rendered by the parent after that data has resolved, so there's no
   // load-then-sync-via-effect step needed (see NotificationSettingsPanel below).
   const [enabled, setEnabled] = useState(config.enabled);
-  const [template, setTemplate] = useState(config.template);
+  const [template, setTemplate] = useState(
+    config.template === "" ? DEFAULT_EVENT_REMINDER_TEMPLATE : config.template,
+  );
   const [daysBefore, setDaysBefore] = useState(config.daysBefore);
   const [defaultRecipientsText, setDefaultRecipientsText] = useState(config.defaultRecipients.join("\n"));
 

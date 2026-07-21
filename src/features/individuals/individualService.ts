@@ -82,6 +82,16 @@ export async function deleteIndividual(
     if (relError) throw toDataAccessError(relError);
   }
 
+  // Bulk-import bookkeeping also references individuals (no ON DELETE clause, so it
+  // blocks deletion with the same 23503 error as `relationships` below) — clear it
+  // unconditionally, since this can block deletion even for someone with zero
+  // relationships. Nulling (not deleting the row) preserves the import batch's history.
+  const { error: importRefError } = await supabase
+    .from("import_row_results")
+    .update({ individual_id: null })
+    .eq("individual_id", id);
+  if (importRefError) throw toDataAccessError(importRefError);
+
   const { error } = await supabase.from("individuals").delete().eq("id", id);
   if (error) {
     if (error.code === "23503") {

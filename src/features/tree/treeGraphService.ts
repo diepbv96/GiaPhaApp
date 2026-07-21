@@ -20,7 +20,14 @@ function resolveAvatarUrl(path: string | null): string | undefined {
 
 export async function getTreeGraph(treeId: string): Promise<TreeGraph> {
   const [individualsResult, relationshipsResult] = await Promise.all([
-    supabase.from("individuals").select(INDIVIDUAL_COLUMNS).eq("family_tree_id", treeId),
+    // Filters through individual_tree_memberships (not individuals.family_tree_id
+    // directly) so a person who belongs to more than one tree still shows up in every
+    // tree they're a member of, not only the one they were originally created in
+    // (spec 006 FR-004/FR-016; contracts/tree-membership.md).
+    supabase
+      .from("individuals")
+      .select(`${INDIVIDUAL_COLUMNS}, individual_tree_memberships!inner(family_tree_id)`)
+      .eq("individual_tree_memberships.family_tree_id", treeId),
     supabase
       .from("relationships")
       .select("id, family_tree_id, type, person_a_id, person_b_id")

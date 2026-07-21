@@ -3,8 +3,12 @@ import { renderHook } from "@testing-library/react";
 import { useTreeLayout } from "@/features/tree/useTreeLayout";
 import type { Individual, TreeGraph } from "@/types";
 
-function makeIndividual(id: string, gender: Individual["gender"] = "unknown"): Individual {
-  return { id, familyTreeId: "tree-1", fullName: id, gender, isDeceased: false };
+function makeIndividual(
+  id: string,
+  gender: Individual["gender"] = "unknown",
+  siblingOrder?: number,
+): Individual {
+  return { id, familyTreeId: "tree-1", fullName: id, gender, isDeceased: false, siblingOrder };
 }
 
 describe("useTreeLayout", () => {
@@ -85,6 +89,33 @@ describe("useTreeLayout", () => {
 
     expect(child1Pos.y).toBe(child2Pos.y);
     expect(child1Pos.y).toBeGreaterThan(parentPos.y);
+  });
+
+  it("orders siblings left-to-right by their recorded birth-order position, unpositioned ones last", () => {
+    // Deliberately declared/id'd out of order ("z" sorts after "a" alphabetically) so
+    // this only passes if position — not id — drives the order.
+    const graph: TreeGraph = {
+      individuals: [
+        makeIndividual("parent"),
+        makeIndividual("zPositionTwo", "male", 2),
+        makeIndividual("aPositionFour", "female", 4),
+        makeIndividual("bPositionThree", "unknown", 3),
+        makeIndividual("noPosition", "unknown"),
+      ],
+      relationships: [
+        { id: "r1", familyTreeId: "tree-1", type: "parent_child", personAId: "parent", personBId: "zPositionTwo" },
+        { id: "r2", familyTreeId: "tree-1", type: "parent_child", personAId: "parent", personBId: "aPositionFour" },
+        { id: "r3", familyTreeId: "tree-1", type: "parent_child", personAId: "parent", personBId: "bPositionThree" },
+        { id: "r4", familyTreeId: "tree-1", type: "parent_child", personAId: "parent", personBId: "noPosition" },
+      ],
+    };
+
+    const { result } = renderHook(() => useTreeLayout(graph));
+    const xOf = (id: string) => result.current.positions.get(id)!.x;
+
+    expect(xOf("zPositionTwo")).toBeLessThan(xOf("bPositionThree"));
+    expect(xOf("bPositionThree")).toBeLessThan(xOf("aPositionFour"));
+    expect(xOf("aPositionFour")).toBeLessThan(xOf("noPosition"));
   });
 
   it("groups a person with more than one spouse into a single row, centered between them", () => {

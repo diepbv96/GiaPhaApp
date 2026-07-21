@@ -8,21 +8,26 @@ import { useBackgroundColorPreference } from "@/features/tree/useBackgroundColor
 import { IndividualDetailPanel } from "@/features/individuals/IndividualDetailPanel";
 import { IndividualForm } from "@/features/individuals/IndividualForm";
 import { DeleteIndividualDialog } from "@/features/individuals/DeleteIndividualDialog";
+import { ManageTreeMembershipDialog } from "@/features/individuals/ManageTreeMembershipDialog";
 import { updateIndividualPosition } from "@/features/individuals/individualService";
 import { RelationshipForm } from "@/features/relationships/RelationshipForm";
+import { RelationshipTypeEditor } from "@/features/relationships/RelationshipTypeEditor";
+import { deleteRelationship } from "@/features/relationships/relationshipService";
 import { ImportDialog } from "@/features/import/ImportDialog";
 import { ExportButton } from "@/features/export/ExportButton";
 import { Modal } from "@/app/Modal";
 import { Sidebar, SidebarSection, SidebarItem, SidebarToggle } from "@/app/Sidebar";
 import { useAuth } from "@/features/auth/AuthContext";
 import { signOut } from "@/features/auth/authService";
-import type { Individual } from "@/types";
+import type { Individual, Relationship } from "@/types";
 
 type ModalState =
   | { kind: "create-individual" }
   | { kind: "edit-individual"; individual: Individual }
   | { kind: "delete-individual"; individual: Individual }
   | { kind: "create-relationship"; personAId?: string }
+  | { kind: "edit-relationship"; relationship: Relationship; otherPerson: Individual }
+  | { kind: "manage-tree-membership"; individual: Individual }
   | { kind: "import" }
   | null;
 
@@ -71,6 +76,12 @@ export function TreeWorkspace({ treeId, treeName, upcomingEventsPath }: TreeWork
 
   function refreshGraph() {
     queryClient.invalidateQueries({ queryKey: ["tree-graph", treeId] });
+  }
+
+  /** A tree-membership change can add/remove the person from any tree's canvas, not
+   * just this one, so every currently-mounted tree-graph query is invalidated. */
+  function refreshAllTreeGraphs() {
+    queryClient.invalidateQueries({ queryKey: ["tree-graph"] });
   }
 
   function handleNodePositionChange(individualId: string, position: { x: number; y: number }) {
@@ -146,6 +157,16 @@ export function TreeWorkspace({ treeId, treeName, upcomingEventsPath }: TreeWork
           graph={graph ?? { individuals: [], relationships: [] }}
           onSelectIndividual={setSelectedId}
           onClose={() => setSelectedId(null)}
+          canManage={canManage}
+          onEditRelationship={(relationship, otherPerson) => setModal({ kind: "edit-relationship", relationship, otherPerson })}
+          onDeleteRelationship={(relationship) => {
+            deleteRelationship(relationship.id)
+              .then(refreshGraph)
+              .catch(() => {
+                // Best-effort UI refresh; the relationship stays visible if the delete
+                // fails and the user can retry.
+              });
+          }}
           actions={
             canManage && selectedIndividual ? (
               <div className="flex flex-col gap-2">
@@ -162,6 +183,13 @@ export function TreeWorkspace({ treeId, treeName, upcomingEventsPath }: TreeWork
                   className="rounded-lg border border-[var(--color-brand-500)] px-3 py-1.5 text-sm font-medium text-[var(--color-brand-600)]"
                 >
                   Thêm mối quan hệ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModal({ kind: "manage-tree-membership", individual: selectedIndividual })}
+                  className="rounded-lg border border-[var(--color-brand-500)] px-3 py-1.5 text-sm font-medium text-[var(--color-brand-600)]"
+                >
+                  Thêm vào cây gia phả khác
                 </button>
                 <button
                   type="button"
@@ -230,6 +258,29 @@ export function TreeWorkspace({ treeId, treeName, upcomingEventsPath }: TreeWork
               refreshGraph();
               setModal(null);
             }}
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === "edit-relationship" && (
+        <Modal title={`Sửa mối quan hệ với ${modal.otherPerson.fullName}`} onClose={() => setModal(null)}>
+          <RelationshipTypeEditor
+            relationship={modal.relationship}
+            onCancel={() => setModal(null)}
+            onSaved={() => {
+              refreshGraph();
+              setModal(null);
+            }}
+          />
+        </Modal>
+      )}
+
+      {modal?.kind === "manage-tree-membership" && (
+        <Modal title={`Quản lý cây gia phả — ${modal.individual.fullName}`} onClose={() => setModal(null)}>
+          <ManageTreeMembershipDialog
+            individual={modal.individual}
+            onChanged={refreshAllTreeGraphs}
+            onClose={() => setModal(null)}
           />
         </Modal>
       )}

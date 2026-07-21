@@ -109,9 +109,10 @@ export function IndividualForm({
   const deathPrecision = watch("deathDatePrecision");
   const isDeceased = watch("isDeceased");
   const siblingOrderInput = watch("siblingOrder");
+  const genderInput = watch("gender");
   const siblingOrderPreview =
     siblingOrderInput && /^\d+$/.test(siblingOrderInput) && Number(siblingOrderInput) >= 2
-      ? siblingOrderLabel(Number(siblingOrderInput))
+      ? siblingOrderLabel(Number(siblingOrderInput), genderInput)
       : undefined;
   const { showToast } = useToast();
 

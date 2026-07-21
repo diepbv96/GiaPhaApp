@@ -122,6 +122,32 @@ export async function updateTreeSlug(treeId: string, slug: string): Promise<Fami
   return mapFamilyTreeRow(data as FamilyTreeRow);
 }
 
+/**
+ * Admin-only rename (spec 006 FR-001-FR-003). The DB already permits this via the
+ * existing `family_trees_admin_update` RLS policy and the `name` column's own
+ * non-empty `CHECK` constraint — only the client function/UI were missing.
+ */
+export async function updateFamilyTreeName(treeId: string, name: string): Promise<FamilyTreeSummary> {
+  const { data, error } = await supabase
+    .from("family_trees")
+    .update({ name })
+    .eq("id", treeId)
+    .select(TREE_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    if (error?.code === "23514") {
+      throw new DataAccessError("VALIDATION_FAILED", "Tên cây gia phả không được để trống.");
+    }
+    if (error?.code === "42501") {
+      throw new DataAccessError("PERMISSION_DENIED", "Chỉ quản trị viên mới có thể sửa tên cây gia phả.");
+    }
+    throw new DataAccessError("UNKNOWN", "Không thể sửa tên cây gia phả.");
+  }
+
+  return mapFamilyTreeRow(data as FamilyTreeRow);
+}
+
 export async function setDefaultFamilyTree(treeId: string): Promise<void> {
   const { error } = await supabase.rpc("set_default_family_tree", { target_id: treeId });
   if (error) {

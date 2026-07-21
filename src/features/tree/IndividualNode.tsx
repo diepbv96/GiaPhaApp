@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Individual } from "@/types";
+import { siblingOrderLabel } from "@/lib/formatters";
 
 export interface IndividualNodeData {
   individual: Individual;
@@ -40,7 +41,7 @@ export function IndividualNode({ data }: NodeProps & { data: IndividualNodeData 
       {individual.siblingOrder !== undefined && (
         <span
           className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-brand-600)] text-xs font-semibold text-white shadow"
-          title={`Thứ ${individual.siblingOrder} trong các anh/chị/em`}
+          title={siblingOrderLabel(individual.siblingOrder, individual.gender)}
         >
           {individual.siblingOrder}
         </span>

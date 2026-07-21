@@ -92,7 +92,14 @@ export function CalendarGrid({ month, year, eventsByDay, selectedDay, onSelectDa
               <span className="text-xs text-[var(--color-ink-muted)]">
                 {lunar ? `${lunar.day}/${lunar.month}${lunar.isLeapMonth ? "N" : ""}` : "—"}
               </span>
-              {hasEvents && <span aria-hidden="true">🎉</span>}
+              {hasEvents && (
+                <span
+                  aria-hidden="true"
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white"
+                >
+                  {events.length}
+                </span>
+              )}
             </button>
           );
         })}

@@ -11,6 +11,7 @@ import {
 import { Modal } from "@/app/Modal";
 import { useToast } from "@/app/ToastProvider";
 import { SlugField } from "@/features/trees/SlugField";
+import { TreeNameField } from "@/features/trees/TreeNameField";
 import type { FamilyTreeSummary } from "@/types";
 
 const MAX_TREES = 5;
@@ -24,6 +25,7 @@ export default function TreeManagement() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FamilyTreeSummary | null>(null);
   const [slugEditTarget, setSlugEditTarget] = useState<FamilyTreeSummary | null>(null);
+  const [nameEditTarget, setNameEditTarget] = useState<FamilyTreeSummary | null>(null);
 
   const treesQuery = useQuery({ queryKey: ["family-trees", "all"], queryFn: getFamilyTrees });
 
@@ -200,6 +202,19 @@ export default function TreeManagement() {
                     >
                       {tree.isPublic ? "🔒 Chuyển về riêng tư" : "🌐 Công khai"}
                     </button>
+                    <Link
+                      to={`/${tree.slug}`}
+                      className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-brand-50)]"
+                    >
+                      👁️ Xem chi tiết
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setNameEditTarget(tree)}
+                      className="w-full rounded-lg px-2 py-1.5 text-left text-sm font-medium text-[var(--color-ink)] transition hover:bg-[var(--color-brand-50)]"
+                    >
+                      ✏️ Sửa tên
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSlugEditTarget(tree)}
@@ -256,6 +271,17 @@ export default function TreeManagement() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {nameEditTarget && (
+        <Modal title={`Sửa tên — ${nameEditTarget.name}`} onClose={() => setNameEditTarget(null)}>
+          <TreeNameField
+            treeId={nameEditTarget.id}
+            currentName={nameEditTarget.name}
+            onCancel={() => setNameEditTarget(null)}
+            onSaved={() => setNameEditTarget(null)}
+          />
         </Modal>
       )}
 

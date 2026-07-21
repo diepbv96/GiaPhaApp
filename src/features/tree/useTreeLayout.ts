@@ -108,14 +108,20 @@ function computeLayout(graph: TreeGraph): TreeLayout {
   }
 
   // --- 3) Unit -> parent unit: among a unit's members, use whichever has the
-  //        lowest id and a recorded primary parent. ---
+  //        lowest id and a recorded primary parent. That same member's siblingOrder
+  //        (if any) is this unit's position among its parent's other child units. ---
+  const siblingOrderById = new Map(graph.individuals.map((i) => [i.id, i.siblingOrder]));
   const unitParentUnit = new Map<string, string>();
+  const unitSiblingOrderOf = new Map<string, number | undefined>();
   for (const [unitId, members] of unitMembers) {
     for (const memberId of [...members].sort()) {
       const parentId = primaryParentOf.get(memberId);
       if (parentId && individualIds.has(parentId)) {
         const parentUnit = unitIdOf.get(parentId)!;
-        if (parentUnit !== unitId) unitParentUnit.set(unitId, parentUnit);
+        if (parentUnit !== unitId) {
+          unitParentUnit.set(unitId, parentUnit);
+          unitSiblingOrderOf.set(unitId, siblingOrderById.get(memberId));
+        }
         break;
       }
     }
@@ -135,8 +141,18 @@ function computeLayout(graph: TreeGraph): TreeLayout {
     }
   }
 
+  // Siblings (child units of the same parent unit) are ordered ascending by the
+  // recorded birth-order position (2, 3, 4, ...); units with none sort after every
+  // positioned unit; the existing id tie-break still applies for equal/missing values.
+  function compareUnitSiblings(a: string, b: string): number {
+    const orderA = unitSiblingOrderOf.get(a) ?? Number.POSITIVE_INFINITY;
+    const orderB = unitSiblingOrderOf.get(b) ?? Number.POSITIVE_INFINITY;
+    if (orderA !== orderB) return orderA - orderB;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
   function buildUnitNode(id: string): UnitTreeItem {
-    const children = (unitChildrenOf.get(id) ?? []).sort().map(buildUnitNode);
+    const children = (unitChildrenOf.get(id) ?? []).sort(compareUnitSiblings).map(buildUnitNode);
     return { id, children };
   }
 

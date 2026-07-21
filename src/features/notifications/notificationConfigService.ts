@@ -4,6 +4,13 @@ import { DataAccessError, type EventNotificationConfig, type NotificationRecipie
 const CONFIG_ID = "00000000-0000-0000-0000-000000000000";
 const CONFIG_COLUMNS = "enabled, template, days_before, default_recipients";
 
+// Shown as a starting point whenever `template` is still "" (never configured — the
+// column's own DB default, indistinguishable from a deliberately-cleared value). Uses
+// every variable send-event-reminders/logic.ts's renderTemplate() substitutes, so it
+// renders correctly if saved unmodified.
+export const DEFAULT_EVENT_REMINDER_TEMPLATE =
+  "Kính báo: {{ten_ca_nhan}} sẽ có {{loai_su_kien}} vào ngày {{ngay_duong}} ({{ngay_am}}), còn {{so_ngay_con_lai}} ngày nữa.";
+
 interface EventNotificationConfigRow {
   enabled: boolean;
   template: string;

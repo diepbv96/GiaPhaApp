@@ -7,9 +7,15 @@ export const genderLabel: Record<Gender, string> = {
 };
 
 /** Vietnamese sibling-ordinal convention: eldest is "thứ 2", then 3, 4, ... — there's no
- * "thứ nhất", so any value under 2 is nonsensical and shouldn't reach this function. */
-export function siblingOrderLabel(order?: number): string {
+ * "thứ nhất", so any value under 2 is nonsensical and shouldn't reach this function.
+ * Position 2 (the eldest) gets a gender-specific "Trưởng" label instead of a plain number. */
+export function siblingOrderLabel(order: number | undefined, gender: Gender): string {
   if (order === undefined) return "Chưa rõ / con một";
+  if (order === 2) {
+    if (gender === "male") return "Con Trai Trưởng";
+    if (gender === "female") return "Con Gái Trưởng";
+    return "Con Trưởng";
+  }
   return `Con thứ ${order}`;
 }
 

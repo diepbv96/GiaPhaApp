@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { Individual, TreeGraph } from "@/types";
+import type { Individual, Relationship, TreeGraph } from "@/types";
 import { formatPartialDate, genderLabel, siblingOrderLabel } from "@/lib/formatters";
 import { getFamilyRelations, spouseRoleLabel } from "@/features/individuals/familyRelations";
 import { LunarDateBadge } from "@/features/individuals/LunarDateBadge";
@@ -9,18 +9,48 @@ export interface IndividualDetailPanelProps {
   graph: TreeGraph;
   onClose: () => void;
   onSelectIndividual?: (individualId: string) => void;
+  /** Whether the current user may edit/delete relationships (admin/editor). */
+  canManage?: boolean;
+  /** Called when the user chooses to change an existing relationship's type. */
+  onEditRelationship?: (relationship: Relationship, otherPerson: Individual) => void;
+  /** Called when the user chooses to delete an existing relationship. */
+  onDeleteRelationship?: (relationship: Relationship, otherPerson: Individual) => void;
   /** Slot for Admin/Editor-only edit/delete controls, wired in by later stories (FR-010/FR-011). */
   actions?: ReactNode;
+}
+
+/** Finds the direct relationship edge between two people, optionally restricted to one
+ * type. Siblings can be inferred from two separate parent_child edges with no direct
+ * edge of their own — callers should treat `undefined` as "nothing to edit/delete here". */
+function findRelationship(
+  graph: TreeGraph,
+  aId: string,
+  bId: string,
+  type?: Relationship["type"],
+): Relationship | undefined {
+  return graph.relationships.find(
+    (r) =>
+      (type === undefined || r.type === type) &&
+      ((r.personAId === aId && r.personBId === bId) || (r.personAId === bId && r.personBId === aId)),
+  );
 }
 
 function PersonList({
   people,
   onSelectIndividual,
   labelFor,
+  getRelationship,
+  canManage,
+  onEdit,
+  onDelete,
 }: {
   people: Individual[];
   onSelectIndividual?: (individualId: string) => void;
   labelFor?: (person: Individual) => string | undefined;
+  getRelationship?: (person: Individual) => Relationship | undefined;
+  canManage?: boolean;
+  onEdit?: (relationship: Relationship, person: Individual) => void;
+  onDelete?: (relationship: Relationship, person: Individual) => void;
 }) {
   if (people.length === 0) return <p className="text-sm text-[var(--color-ink-muted)]">Chưa rõ</p>;
 
@@ -28,17 +58,38 @@ function PersonList({
     <ul className="flex flex-col gap-1 text-sm">
       {people.map((person) => {
         const suffix = labelFor?.(person);
+        const relationship = getRelationship?.(person);
         return (
-          <li key={person.id}>
-            <button
-              type="button"
-              onClick={() => onSelectIndividual?.(person.id)}
-              disabled={!onSelectIndividual}
-              className="text-left font-medium text-[var(--color-brand-600)] hover:underline disabled:cursor-default disabled:text-[var(--color-ink)] disabled:no-underline"
-            >
-              {person.fullName}
-            </button>
-            {suffix && <span className="text-[var(--color-ink-muted)]"> — {suffix}</span>}
+          <li key={person.id} className="flex items-center justify-between gap-2">
+            <span>
+              <button
+                type="button"
+                onClick={() => onSelectIndividual?.(person.id)}
+                disabled={!onSelectIndividual}
+                className="text-left font-medium text-[var(--color-brand-600)] hover:underline disabled:cursor-default disabled:text-[var(--color-ink)] disabled:no-underline"
+              >
+                {person.fullName}
+              </button>
+              {suffix && <span className="text-[var(--color-ink-muted)]"> — {suffix}</span>}
+            </span>
+            {canManage && relationship && (
+              <span className="flex flex-shrink-0 gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => onEdit?.(relationship, person)}
+                  className="text-[var(--color-brand-600)] hover:underline"
+                >
+                  Sửa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete?.(relationship, person)}
+                  className="text-[var(--color-danger)] hover:underline"
+                >
+                  Xoá
+                </button>
+              </span>
+            )}
           </li>
         );
       })}
@@ -62,6 +113,9 @@ export function IndividualDetailPanel({
   graph,
   onClose,
   onSelectIndividual,
+  canManage,
+  onEditRelationship,
+  onDeleteRelationship,
   actions,
 }: IndividualDetailPanelProps) {
   const [familyExpanded, setFamilyExpanded] = useState(false);
@@ -120,7 +174,7 @@ export function IndividualDetailPanel({
             {individual.isDeceased ? "Đã mất" : "Còn sống"}
           </Chip>
           {individual.siblingOrder !== undefined && (
-            <Chip tone="gold">{siblingOrderLabel(individual.siblingOrder)}</Chip>
+            <Chip tone="gold">{siblingOrderLabel(individual.siblingOrder, individual.gender)}</Chip>
           )}
         </div>
       </div>
@@ -169,22 +223,50 @@ export function IndividualDetailPanel({
             <div className="mt-3 flex flex-col gap-3">
               <div>
                 <p className="mb-1 text-xs font-medium uppercase text-[var(--color-ink-muted)]">Cha mẹ ruột</p>
-                <PersonList people={relations.parents} onSelectIndividual={onSelectIndividual} />
+                <PersonList
+                  people={relations.parents}
+                  onSelectIndividual={onSelectIndividual}
+                  getRelationship={(person) => findRelationship(graph, person.id, individual.id, "parent_child")}
+                  canManage={canManage}
+                  onEdit={onEditRelationship}
+                  onDelete={onDeleteRelationship}
+                />
               </div>
 
               <div>
                 <p className="mb-1 text-xs font-medium uppercase text-[var(--color-ink-muted)]">Vợ/chồng</p>
-                <PersonList people={relations.spouses} onSelectIndividual={onSelectIndividual} />
+                <PersonList
+                  people={relations.spouses}
+                  onSelectIndividual={onSelectIndividual}
+                  getRelationship={(person) => findRelationship(graph, individual.id, person.id, "spouse")}
+                  canManage={canManage}
+                  onEdit={onEditRelationship}
+                  onDelete={onDeleteRelationship}
+                />
               </div>
 
               <div>
                 <p className="mb-1 text-xs font-medium uppercase text-[var(--color-ink-muted)]">Anh/chị/em</p>
-                <PersonList people={relations.siblings} onSelectIndividual={onSelectIndividual} />
+                <PersonList
+                  people={relations.siblings}
+                  onSelectIndividual={onSelectIndividual}
+                  getRelationship={(person) => findRelationship(graph, individual.id, person.id, "sibling")}
+                  canManage={canManage}
+                  onEdit={onEditRelationship}
+                  onDelete={onDeleteRelationship}
+                />
               </div>
 
               <div>
                 <p className="mb-1 text-xs font-medium uppercase text-[var(--color-ink-muted)]">Con ruột</p>
-                <PersonList people={relations.biologicalChildren} onSelectIndividual={onSelectIndividual} />
+                <PersonList
+                  people={relations.biologicalChildren}
+                  onSelectIndividual={onSelectIndividual}
+                  getRelationship={(person) => findRelationship(graph, individual.id, person.id, "parent_child")}
+                  canManage={canManage}
+                  onEdit={onEditRelationship}
+                  onDelete={onDeleteRelationship}
+                />
               </div>
 
               {relations.inLawChildren.length > 0 && (
