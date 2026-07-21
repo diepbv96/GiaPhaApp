@@ -2,6 +2,8 @@
 
 **Module**: `src/features/individuals/individualService.ts`
 
+**Superseded by `specs/007-individuals-admin-dashboard/contracts/individual-delete-everywhere.md`**: the three-separate-request shape below (steps 1-3, each its own implicit transaction) turned out to still allow the exact failure this contract's own "Ordering rule" was written to prevent — deleting a zero-relationship, import-created individual could still hit `23503` on `import_row_results_individual_id_fkey` despite step 2 correctly running before step 3. `deleteIndividual()` now delegates to a single-transaction RPC, `delete_individual_everywhere()` (migration `0022_delete_individual_everywhere.sql`), which removes the three-separate-requests structure entirely rather than further patching it. This file is kept for history; do not use it as the current contract.
+
 ## Signature (unchanged)
 
 ```ts

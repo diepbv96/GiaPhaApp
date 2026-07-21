@@ -14,7 +14,7 @@ A new admin/editor-only page (`/quan-tri/ca-nhan`) listing every individual acro
 
 **Primary Dependencies**: `@supabase/supabase-js`, `@tanstack/react-query` v5 (already supports `placeholderData: keepPreviousData` for pagination, unused elsewhere so far), `react-hook-form` + `zod` (existing form stack, reused via `IndividualForm`) — no new npm packages
 
-**Storage**: Supabase Postgres — one new migration (`0021_individuals_admin_search_and_delete_fix.sql`): two generated, indexed columns on `individuals` for diacritic-tolerant search, and a one-line fix to the existing `enforce_last_tree_membership()` trigger function. No new tables.
+**Storage**: Supabase Postgres — two new migrations: `0021_individuals_admin_search_and_delete_fix.sql` (two generated, indexed columns on `individuals` for diacritic-tolerant search, plus a helper `normalize_search_text()` function; a one-line fix to the existing `enforce_last_tree_membership()` trigger function) and `0022_delete_individual_everywhere.sql` (a new RPC consolidating `deleteIndividual()`'s steps into one atomic transaction, added after manual testing surfaced a real bug — research.md §8). No new tables.
 
 **Testing**: Vitest + React Testing Library (`tests/unit/`), Playwright (`tests/e2e/`) — existing suites
 
@@ -54,7 +54,8 @@ specs/007-individuals-admin-dashboard/
 
 ```text
 supabase/migrations/
-└── 0021_individuals_admin_search_and_delete_fix.sql   # NEW — contracts/individuals-search.md, contracts/individual-delete-everywhere.md
+├── 0021_individuals_admin_search_and_delete_fix.sql   # NEW — contracts/individuals-search.md, contracts/individual-delete-everywhere.md
+└── 0022_delete_individual_everywhere.sql              # NEW — contracts/individual-delete-everywhere.md (added post-implementation, see research.md §8)
 
 src/features/individuals/
 ├── individualService.ts          # MODIFY — add listIndividualsAdmin(); add NOT_FOUND mapping to updateIndividual()/deleteIndividual() (contracts/individual-edit.md, contracts/individual-delete-everywhere.md)

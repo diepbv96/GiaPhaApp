@@ -1,6 +1,6 @@
 # Data Model: Individuals Admin Dashboard
 
-One migration (`0021_individuals_admin_search_and_delete_fix.sql`): one new helper function, two new generated columns + indexes on `individuals`, and a one-line fix to an existing trigger function. No new tables. `family_trees`, `relationships`, and `individual_tree_memberships` keep their existing shapes.
+Two migrations. `0021_individuals_admin_search_and_delete_fix.sql`: one new helper function, two new generated columns + indexes on `individuals`, and a one-line fix to an existing trigger function. `0022_delete_individual_everywhere.sql` (added after a real bug found in manual testing — see the Relationship section below): one new RPC function consolidating `deleteIndividual()`'s steps into a single transaction. No new tables. `family_trees` keeps its existing shape.
 
 ## `normalize_search_text` (new function)
 
@@ -28,7 +28,17 @@ Source: `supabase/migrations/0017_individual_tree_memberships.sql`. No column, i
 
 ## Relationship (existing entity `relationships`, no change)
 
-Source: `supabase/migrations/0005_relationships.sql`. Deleting an individual's relationships (any tree) before deleting the individual row is already `deleteIndividual()`'s existing behavior when `cascadeRelationships` is passed — this feature always passes it (FR-010: deletion is always full/system-wide, no partial-delete option is exposed on this dashboard).
+Source: `supabase/migrations/0005_relationships.sql`. Deleting an individual's relationships (any tree) before deleting the individual row is `deleteIndividual()`'s existing behavior when `cascadeRelationships` is passed — this feature always passes it (FR-010: deletion is always full/system-wide, no partial-delete option is exposed on this dashboard).
+
+## `delete_individual_everywhere` (new function, migration `0022`)
+
+`public.delete_individual_everywhere(target_id uuid, cascade_relationships boolean default false) returns void language plpgsql security invoker` — `revoke all from public`, `grant execute to authenticated` (same shape as `set_default_family_tree()`, `0008_family_tree_functions.sql`). Runs, as one transaction:
+1. Raise `INDIVIDUAL_NOT_FOUND` (`errcode 'P0002'`) if `target_id` doesn't exist — mapped client-side to `DataAccessError("NOT_FOUND", "Cá thể này đã bị xoá trước đó.")` (FR-013).
+2. If `cascade_relationships`, delete every `relationships` row referencing `target_id`, in any tree.
+3. Unconditionally null `import_row_results.individual_id` where it references `target_id`.
+4. Delete the `individuals` row (cascades to `individual_tree_memberships` per the `0021` trigger fix above).
+
+**Why this exists**: `deleteIndividual()` originally issued steps 2-4 as three separate PostgREST requests (three separate implicit transactions). Manual testing surfaced a real case — an individual with **zero relationships**, previously created via bulk `.xlsx` import — where the final `delete from individuals` still failed with `23503` on `import_row_results_individual_id_fkey`, and the client's error handling (which only knew how to blame `relationships` for any `23503`) reported a misleading "cá thể này vẫn còn mối quan hệ" message. Making every step part of one atomic function call removes any cross-request ordering ambiguity and guarantees that by the time the final delete runs, `import_row_results` can never be the blocker — so a `23503` from that delete can now only mean `relationships` still references the person, restoring the accuracy of the existing error message. `security invoker` (not `definer`) means each statement inside the function is still evaluated against the calling user's RLS policies exactly as if issued directly — no new privilege escalation, consistent with this app's "RLS is authoritative" convention.
 
 ## Family Tree (existing entity `family_trees`, no change)
 

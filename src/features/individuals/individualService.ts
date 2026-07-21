@@ -164,41 +164,22 @@ export async function deleteIndividual(
   id: string,
   opts?: { cascadeRelationships?: boolean },
 ): Promise<void> {
-  // `.delete().eq("id", id)` on a nonexistent id returns no error and no effect —
-  // pre-check so an already-deleted individual is reported, not silently "succeeded"
-  // (007-individuals-admin-dashboard FR-013).
-  const { data: existing, error: existsError } = await supabase
-    .from("individuals")
-    .select("id")
-    .eq("id", id)
-    .maybeSingle();
-  if (existsError) throw toDataAccessError(existsError);
-  if (!existing) {
-    throw new DataAccessError("NOT_FOUND", "Cá thể này đã bị xoá trước đó.");
-  }
+  // Single atomic transaction (migration 0022) — previously this was three separate
+  // requests (null import_row_results, then delete individuals), which let the final
+  // delete fail on the import_row_results FK even for an individual with zero
+  // relationships, misreported as "still has relationships" by the 23503 catch below.
+  const { error } = await supabase.rpc("delete_individual_everywhere", {
+    target_id: id,
+    cascade_relationships: opts?.cascadeRelationships ?? false,
+  });
 
-  if (opts?.cascadeRelationships) {
-    const { error: relError } = await supabase
-      .from("relationships")
-      .delete()
-      .or(`person_a_id.eq.${id},person_b_id.eq.${id}`);
-    if (relError) throw toDataAccessError(relError);
-  }
-
-  // Bulk-import bookkeeping also references individuals (no ON DELETE clause, so it
-  // blocks deletion with the same 23503 error as `relationships` below) — clear it
-  // unconditionally, since this can block deletion even for someone with zero
-  // relationships. Nulling (not deleting the row) preserves the import batch's history.
-  const { error: importRefError } = await supabase
-    .from("import_row_results")
-    .update({ individual_id: null })
-    .eq("individual_id", id);
-  if (importRefError) throw toDataAccessError(importRefError);
-
-  const { error } = await supabase.from("individuals").delete().eq("id", id);
   if (error) {
+    if (error.message.includes("INDIVIDUAL_NOT_FOUND")) {
+      throw new DataAccessError("NOT_FOUND", "Cá thể này đã bị xoá trước đó.");
+    }
     if (error.code === "23503") {
-      // FK from relationships still references this individual (FR-012)
+      // Only `relationships` can still reference this individual at this point —
+      // import_row_results is unconditionally cleared earlier in the same transaction.
       throw new DataAccessError(
         "CONFLICT",
         "Không thể xoá: cá thể này vẫn còn mối quan hệ. Hãy xoá mối quan hệ trước hoặc xác nhận xoá cả mối quan hệ.",
