@@ -86,10 +86,19 @@ push` or `bootstrap.sql`):
    - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the
      Edge Function runtime — never set these yourself.
 
-3. Schedule it: Supabase Dashboard → **Edge Functions** → `send-event-reminders` →
-   **Cron** → add a daily trigger (any time of day; the function itself computes
-   "today" in Vietnam's UTC+7). This isn't expressible in `supabase/config.toml`, so
-   it has to be a one-time manual step per project.
+3. Schedule it: migration `0020_schedule_event_reminders_cron.sql` sets up a
+   `pg_cron` + `pg_net` job that calls the function daily at 06:00 Asia/Ho_Chi_Minh
+   (23:00 UTC). It has one manual prerequisite per project — create two Vault
+   secrets (Dashboard → **Project Settings** → **Vault**, or SQL):
+
+   ```sql
+   select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+   select vault.create_secret('<service_role_key>', 'service_role_key');
+   ```
+
+   Apply the migration (`supabase db push`) after the secrets exist. Verify with
+   `select * from cron.job;` and `select * from cron.job_run_details order by
+   start_time desc limit 5;`.
 
 4. Turn reminders on: sign in as Admin → sidebar → **Cấu hình thông báo** → enable,
    set the template/lead time/recipients, save. The function itself checks this

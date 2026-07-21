@@ -2,9 +2,10 @@
 // Event occurrence (spec FR-012/FR-013). See
 // specs/002-lunar-events-tree-slugs/contracts/event-notification-config.md.
 //
-// Deployment: `supabase functions deploy send-event-reminders`, then configure a daily
-// Supabase Cron Trigger for it (dashboard, or `supabase/config.toml` — see
-// supabase/functions/send-event-reminders/.env.example for required secrets).
+// Deployment: `supabase functions deploy send-event-reminders`. Daily scheduling is
+// handled by the pg_cron + pg_net job in
+// supabase/migrations/0020_schedule_event_reminders_cron.sql — see
+// supabase/functions/send-event-reminders/.env.example for required secrets.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { computeDueReminders, type IndividualInput, type RecipientOverrideInput, type SentLogEntry } from "./logic.ts";

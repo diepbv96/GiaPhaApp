@@ -8,6 +8,7 @@ import { IndividualNode, type IndividualNodeData } from "@/features/tree/Individ
 import { JunctionNode } from "@/features/tree/JunctionNode";
 import { RelationshipEdge, type RelationshipEdgeData } from "@/features/tree/RelationshipEdge";
 import { filterOutInLaws } from "@/features/tree/inLawFilter";
+import { computeIsolatedIds } from "@/features/tree/isolatedIndividuals";
 
 const nodeTypes = { individual: IndividualNode, junction: JunctionNode };
 const edgeTypes = { relationship: RelationshipEdge };
@@ -29,24 +30,15 @@ export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function T
   { graph, onSelectIndividual, canDrag = false, onNodePositionChange, hideInLaws = false, backgroundColor },
   ref,
 ) {
-  // spec.md US2 acceptance scenario 1: a newly created individual only appears on the
-  // tree once at least one relationship links them to it — isolated individuals with
-  // zero relationships are excluded from the visual diagram.
-  const connectedGraph = useMemo<TreeGraph>(() => {
-    const connectedIds = new Set<string>();
-    for (const rel of graph.relationships) {
-      connectedIds.add(rel.personAId);
-      connectedIds.add(rel.personBId);
-    }
-    return {
-      individuals: graph.individuals.filter((individual) => connectedIds.has(individual.id)),
-      relationships: graph.relationships,
-    };
-  }, [graph]);
+  // 008-display-unconnected-individuals: every individual who is a member of this tree is
+  // rendered, regardless of whether they have any relationship recorded in this tree —
+  // isolatedIds only flags them (for IndividualNode's visual treatment), it never removes
+  // anyone from displayGraph.
+  const isolatedIds = useMemo(() => computeIsolatedIds(graph), [graph]);
 
   const displayGraph = useMemo<TreeGraph>(
-    () => (hideInLaws ? filterOutInLaws(connectedGraph) : connectedGraph),
-    [connectedGraph, hideInLaws],
+    () => (hideInLaws ? filterOutInLaws(graph) : graph),
+    [graph, hideInLaws],
   );
 
   const { positions, unitIdOf, junctions } = useTreeLayout(displayGraph);
@@ -145,6 +137,7 @@ export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function T
           individual,
           hasChildren: hasChildren(individual.id),
           collapsed: isCollapsed(individual.id),
+          isIsolated: isolatedIds.has(individual.id),
           onToggleCollapse: toggle,
           onSelect: onSelectIndividual,
         },
@@ -164,7 +157,18 @@ export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function T
     });
 
     return { nodes: [...individualNodes, ...junctionNodes], edges: edgeList };
-  }, [displayGraph, positions, unitIdOf, junctions, hiddenIds, hasChildren, isCollapsed, toggle, onSelectIndividual]);
+  }, [
+    displayGraph,
+    positions,
+    unitIdOf,
+    junctions,
+    hiddenIds,
+    hasChildren,
+    isCollapsed,
+    toggle,
+    onSelectIndividual,
+    isolatedIds,
+  ]);
 
   const handleNodeDragStop: OnNodeDrag = (_event, node) => {
     onNodePositionChange?.(node.id, node.position);

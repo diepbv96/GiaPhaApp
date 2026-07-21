@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
-import { mapIndividualRow, type IndividualRow } from "@/lib/mappers";
-import { DataAccessError, type Individual } from "@/types";
+import { mapFamilyTreeRow, mapIndividualRow, type FamilyTreeRow, type IndividualRow } from "@/lib/mappers";
+import { normalizeSearchTerm } from "@/features/individuals/individualSearch";
+import { DataAccessError, type FamilyTreeSummary, type Individual, type IndividualsAdminPage } from "@/types";
 
 const AVATAR_BUCKET = "avatars";
 
@@ -8,6 +9,13 @@ const AVATAR_BUCKET = "avatars";
 // fetch reuses this too, so adding a column here never means silently dropping it there.
 export const INDIVIDUAL_COLUMNS =
   "id, family_tree_id, full_name, alias, gender, birth_date, birth_date_precision, is_deceased, death_date, death_date_precision, notes, avatar_path, layout_x, layout_y, sibling_order";
+
+// Mirrors treeGraphService.ts's private resolveAvatarUrl — duplicated (not imported)
+// to avoid a circular import, since treeGraphService.ts already imports from this module.
+function resolveAvatarUrl(path: string | null): string | undefined {
+  if (!path) return undefined;
+  return supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path).data.publicUrl;
+}
 
 export type IndividualInput = Omit<Individual, "id" | "familyTreeId" | "avatarUrl" | "layoutPosition">;
 
@@ -35,6 +43,14 @@ function toDataAccessError(error: { message: string; code?: string }): DataAcces
   if (error.code === "42501") {
     return new DataAccessError("PERMISSION_DENIED", "Bạn không có quyền thực hiện thao tác này.");
   }
+  if (error.code === "PGRST116") {
+    // .single() found 0 (or >1) rows — for an id-scoped update this means the record
+    // was already deleted by someone else (007-individuals-admin-dashboard FR-013).
+    return new DataAccessError(
+      "NOT_FOUND",
+      "Cá thể này không còn tồn tại (có thể đã bị người khác xoá).",
+    );
+  }
   return new DataAccessError("UNKNOWN", "Đã xảy ra lỗi. Vui lòng thử lại.");
 }
 
@@ -61,6 +77,80 @@ export async function updateIndividual(id: string, input: IndividualInput): Prom
   return mapIndividualRow(data as IndividualRow);
 }
 
+/**
+ * Cross-tree, paginated, filterable/searchable individuals list for the admin
+ * dashboard (007-individuals-admin-dashboard). Two-query shape (contracts/individuals-list-search.md):
+ * (1) a selection query, optionally tree-filtered and/or search-filtered, paginated;
+ * (2) a membership-display query for exactly the returned page's ids, unfiltered by
+ * tree, so every individual's full set of family trees is shown regardless of which
+ * tree filter (if any) narrowed the selection query.
+ */
+export async function listIndividualsAdmin(params: {
+  page: number;
+  pageSize: number;
+  treeId?: string;
+  search?: string;
+}): Promise<IndividualsAdminPage> {
+  const { page, pageSize, treeId, search } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  // Always embed the membership join (rather than conditionally, based on whether a
+  // tree filter is active) so supabase-js's select-string literal type inference has a
+  // single, constant string to parse — every individual always has >=1 membership row
+  // (invariant enforced by 0017_individual_tree_memberships.sql), so requiring the
+  // `!inner` join is a no-op filter-wise when no `.eq()` is added below.
+  let query = supabase
+    .from("individuals")
+    .select(`${INDIVIDUAL_COLUMNS}, individual_tree_memberships!inner(family_tree_id)`, { count: "exact" });
+
+  if (treeId) {
+    query = query.eq("individual_tree_memberships.family_tree_id", treeId);
+  }
+
+  const term = search ? normalizeSearchTerm(search) : "";
+  if (term) {
+    // Commas/parentheses are structural in PostgREST's `.or()` filter grammar — names
+    // never legitimately contain them, so strip rather than escape.
+    const safeTerm = term.replace(/[,()]/g, "");
+    query = query.or(`full_name_normalized.ilike.%${safeTerm}%,alias_normalized.ilike.%${safeTerm}%`);
+  }
+
+  const { data, error, count } = await query.order("full_name", { ascending: true }).range(from, to);
+
+  if (error) throw new DataAccessError("UNKNOWN", "Không thể tải danh sách cá thể.");
+
+  const rows = (data ?? []) as unknown as IndividualRow[];
+  const total = count ?? 0;
+  if (rows.length === 0) return { individuals: [], total };
+
+  const ids = rows.map((row) => row.id);
+  const { data: membershipRows, error: membershipError } = await supabase
+    .from("individual_tree_memberships")
+    .select("individual_id, family_trees(id, name, slug, is_default, is_public)")
+    .in("individual_id", ids);
+
+  if (membershipError) throw new DataAccessError("UNKNOWN", "Không thể tải danh sách cây gia phả của cá thể.");
+
+  const treesByIndividual = new Map<string, FamilyTreeSummary[]>();
+  for (const row of (membershipRows ?? []) as unknown as {
+    individual_id: string;
+    family_trees: FamilyTreeRow | null;
+  }[]) {
+    if (!row.family_trees) continue;
+    const trees = treesByIndividual.get(row.individual_id) ?? [];
+    trees.push(mapFamilyTreeRow(row.family_trees));
+    treesByIndividual.set(row.individual_id, trees);
+  }
+
+  const individuals = rows.map((row) => ({
+    ...mapIndividualRow(row, resolveAvatarUrl(row.avatar_path)),
+    familyTrees: treesByIndividual.get(row.id) ?? [],
+  }));
+
+  return { individuals, total };
+}
+
 /** Persists a manually dragged node position (Admin/Editor only, enforced by RLS). */
 export async function updateIndividualPosition(id: string, position: { x: number; y: number }): Promise<void> {
   const { error } = await supabase
@@ -74,6 +164,19 @@ export async function deleteIndividual(
   id: string,
   opts?: { cascadeRelationships?: boolean },
 ): Promise<void> {
+  // `.delete().eq("id", id)` on a nonexistent id returns no error and no effect —
+  // pre-check so an already-deleted individual is reported, not silently "succeeded"
+  // (007-individuals-admin-dashboard FR-013).
+  const { data: existing, error: existsError } = await supabase
+    .from("individuals")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+  if (existsError) throw toDataAccessError(existsError);
+  if (!existing) {
+    throw new DataAccessError("NOT_FOUND", "Cá thể này đã bị xoá trước đó.");
+  }
+
   if (opts?.cascadeRelationships) {
     const { error: relError } = await supabase
       .from("relationships")

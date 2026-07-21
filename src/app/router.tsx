@@ -3,6 +3,7 @@ import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import TreeManagement from "@/pages/Admin/TreeManagement";
 import NotificationSettings from "@/pages/Admin/NotificationSettings";
+import IndividualsManagement from "@/pages/Admin/IndividualsManagement";
 import UpcomingEvents from "@/pages/UpcomingEvents";
 import TreeBySlug from "@/pages/TreeBySlug";
 import { RequireRole } from "@/features/auth/RequireRole";
@@ -38,6 +39,16 @@ export const router = createBrowserRouter(
       element: (
         <RequireRole allow={["admin"]}>
           <NotificationSettings />
+        </RequireRole>
+      ),
+    },
+    {
+      // Admin/editor individuals dashboard: list/filter/search/edit/delete across every
+      // family tree (spec 007) — the first /quan-tri/... route open to editors too.
+      path: "/quan-tri/ca-nhan",
+      element: (
+        <RequireRole allow={["admin", "editor"]}>
+          <IndividualsManagement />
         </RequireRole>
       ),
     },

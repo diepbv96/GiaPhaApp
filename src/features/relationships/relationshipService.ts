@@ -100,6 +100,21 @@ export async function updateRelationship(id: string, type: RelationshipType): Pr
   return mapRelationshipRow(data as RelationshipRow);
 }
 
+/**
+ * System-wide (every family tree, not just one) count of relationships referencing an
+ * individual — used by the admin dashboard's delete confirmation (007-individuals-admin-dashboard),
+ * whose deletion is always system-wide, unlike TreeWorkspace's tree-scoped `graph.relationships` count.
+ */
+export async function getRelationshipCountForIndividual(individualId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("relationships")
+    .select("id", { count: "exact", head: true })
+    .or(`person_a_id.eq.${individualId},person_b_id.eq.${individualId}`);
+
+  if (error) throw new DataAccessError("UNKNOWN", "Không thể tải số lượng mối quan hệ.");
+  return count ?? 0;
+}
+
 export async function deleteRelationship(id: string): Promise<void> {
   const { error } = await supabase.from("relationships").delete().eq("id", id);
   if (error) {

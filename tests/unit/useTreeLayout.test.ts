@@ -210,4 +210,21 @@ describe("useTreeLayout", () => {
 
     expect(pos).toEqual({ id: "solo", x: 999, y: 42 });
   });
+
+  it("lays out a connected couple and an unrelated, zero-relationship individual together (008-display-unconnected-individuals)", () => {
+    const graph: TreeGraph = {
+      individuals: [makeIndividual("husband"), makeIndividual("wife"), makeIndividual("solo")],
+      relationships: [
+        { id: "r1", familyTreeId: "tree-1", type: "spouse", personAId: "husband", personBId: "wife" },
+      ],
+    };
+
+    const { result } = renderHook(() => useTreeLayout(graph));
+
+    expect(result.current.positions.size).toBe(3);
+    expect(result.current.positions.has("solo")).toBe(true);
+    // the isolated individual is its own unit, distinct from the couple's unit
+    expect(result.current.unitIdOf.get("solo")).not.toBe(result.current.unitIdOf.get("husband"));
+    expect(result.current.unitIdOf.get("husband")).toBe(result.current.unitIdOf.get("wife"));
+  });
 });

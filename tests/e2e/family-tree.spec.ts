@@ -153,3 +153,95 @@ test.describe("Guest (unauthenticated) viewing of a published tree — FR-028/FR
     expect(result).not.toBeNull(); // RLS denies the insert (no policy grants anon write access)
   });
 });
+
+// specs/008-display-unconnected-individuals/quickstart.md
+//
+// Each test below creates and cleans up its own uniquely-named individual rather than
+// mutating shared seed fixtures ("Bùi Văn Cha"/"Bùi Thị Út"), so these tests stay
+// independent and safe under this project's `fullyParallel: true` Playwright config.
+test.describe("Spec 008 - Isolated individuals remain visible and actionable", () => {
+  test("a brand-new individual with no relationship is shown on the canvas, not hidden (FR-001/FR-003)", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+
+    await page.getByRole("button", { name: "+ Thêm cá thể" }).click();
+    await page.getByLabel("Họ tên *").fill("Playwright Isolated Person");
+    await page.getByRole("button", { name: "Lưu" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // Present immediately with zero relationships — this is exactly the case that used
+    // to be silently excluded from the canvas before this feature.
+    await expect(page.getByText("Playwright Isolated Person")).toBeVisible();
+
+    // Cleanup.
+    await page.getByText("Playwright Isolated Person").first().click();
+    await page.getByRole("button", { name: "Xoá cá thể" }).click();
+    await page.getByRole("button", { name: "Xoá" }).click();
+  });
+
+  test("an isolated individual is visually distinct and remains fully selectable — add-relationship and delete both work (FR-005/FR-006/FR-007)", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+
+    await page.getByRole("button", { name: "+ Thêm cá thể" }).click();
+    await page.getByLabel("Họ tên *").fill("Playwright Isolated Actionable");
+    await page.getByRole("button", { name: "Lưu" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    const isolatedCard = page.locator(".react-flow__node", { hasText: "Playwright Isolated Actionable" });
+    await expect(isolatedCard.getByText("Chưa có mối quan hệ")).toBeVisible();
+
+    await isolatedCard.click();
+    await expect(page.getByRole("complementary", { name: "Thông tin cá nhân" })).toBeVisible();
+
+    // Add-relationship works identically to any other individual — the form defaults to
+    // "parent_child" with the selected (isolated) individual as person A, so link them
+    // as parent of the seeded "Bùi Văn Cha" ("Con" = person B for this type).
+    await page.getByRole("button", { name: "Thêm mối quan hệ" }).click();
+    await page.getByLabel("Con").selectOption({ label: "Bùi Văn Cha" });
+    await page.getByRole("button", { name: "Lưu" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(isolatedCard.getByText("Chưa có mối quan hệ")).toHaveCount(0);
+
+    // Cleanup — deleting the individual also removes the relationship just created.
+    await isolatedCard.click();
+    await page.getByRole("button", { name: "Xoá cá thể" }).click();
+    await page.getByText("Tôi hiểu và muốn xoá cả các mối quan hệ liên quan").click();
+    await page.getByRole("button", { name: "Xoá" }).click();
+  });
+
+  test("a viewer sees an isolated individual with the same visual marker but no action controls (FR-009)", async ({
+    page,
+  }) => {
+    // "Bùi Thị Út" (second seeded tree) has zero relationships by default — read-only
+    // check, no fixture mutation needed. Viewers have no in-app link to a non-default
+    // tree (only admin/editor fetch the tree switcher list), so read its slug directly
+    // via the same Supabase client the app itself uses, then navigate there — this is a
+    // read a viewer's own RLS policies already permit (public tree metadata).
+    await signIn(page, ACCOUNTS.viewer);
+
+    const slug = await page.evaluate(async () => {
+      const { supabase } = await import("/src/lib/supabase.ts");
+      const { data } = await supabase
+        .from("family_trees")
+        .select("slug")
+        .eq("name", "Gia Phả Chi Nhánh Miền Nam (Mẫu)")
+        .single();
+      return data?.slug ?? null;
+    });
+    expect(slug).not.toBeNull();
+
+    await page.goto(`/${slug}`);
+    await expect(page.getByTestId("tree-canvas")).toBeVisible({ timeout: 10_000 });
+
+    const isolatedCard = page.locator(".react-flow__node", { hasText: "Bùi Thị Út" });
+    await expect(isolatedCard.getByText("Chưa có mối quan hệ")).toBeVisible();
+
+    await isolatedCard.click();
+    await expect(page.getByRole("complementary", { name: "Thông tin cá nhân" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Thêm mối quan hệ" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Xoá cá thể" })).toHaveCount(0);
+  });
+});

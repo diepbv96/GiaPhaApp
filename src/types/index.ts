@@ -82,6 +82,17 @@ export interface TreeGraph {
   relationships: Relationship[];
 }
 
+/** An individual plus every family tree they belong to — for the admin dashboard's list (007). */
+export interface IndividualWithTrees extends Individual {
+  familyTrees: FamilyTreeSummary[];
+}
+
+/** One page of the admin dashboard's individuals list, plus the total count matching the current filter/search. */
+export interface IndividualsAdminPage {
+  individuals: IndividualWithTrees[];
+  total: number;
+}
+
 export interface ImportRowResult {
   kind: "individual" | "relationship";
   rowNumber: number;

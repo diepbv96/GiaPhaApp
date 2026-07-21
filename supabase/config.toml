@@ -26,8 +26,8 @@ enable_signup = false
 enabled = true
 
 # send-event-reminders (supabase/functions/send-event-reminders/) is scheduled to run
-# once daily via a Cron Trigger configured in the Supabase Dashboard (Edge Functions >
-# send-event-reminders > Cron), since Cron Triggers are a per-project dashboard/API
-# setting, not something this local config.toml can express. Required secrets are
-# documented in supabase/functions/send-event-reminders/.env.example — see README.md
-# for full deployment steps.
+# once daily at 06:00 Asia/Ho_Chi_Minh via the pg_cron + pg_net job created in
+# supabase/migrations/0020_schedule_event_reminders_cron.sql (not expressible in this
+# local config.toml). Required Edge Function secrets are documented in
+# supabase/functions/send-event-reminders/.env.example — see README.md for full
+# deployment steps.

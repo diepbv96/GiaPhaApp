@@ -6,6 +6,8 @@ export interface IndividualNodeData {
   individual: Individual;
   hasChildren: boolean;
   collapsed: boolean;
+  /** True when this individual has zero relationships in the current tree (008-display-unconnected-individuals). */
+  isIsolated: boolean;
   onToggleCollapse: (individualId: string) => void;
   onSelect: (individualId: string) => void;
   [key: string]: unknown;
@@ -29,15 +31,27 @@ const cardStatusStyle: Record<"living" | "deceased", { border: string; backgroun
 // the card only ever shows the avatar and full name; everything else lives in the
 // detail panel.
 export function IndividualNode({ data }: NodeProps & { data: IndividualNodeData }) {
-  const { individual, hasChildren, collapsed, onToggleCollapse, onSelect } = data;
+  const { individual, hasChildren, collapsed, isIsolated, onToggleCollapse, onSelect } = data;
   const statusStyle = cardStatusStyle[individual.isDeceased ? "deceased" : "living"];
 
   return (
     <div
       className="relative flex h-[150px] w-[200px] cursor-pointer flex-col items-center justify-between rounded-xl p-3 text-center shadow-md transition hover:shadow-lg"
-      style={{ border: `2px solid ${statusStyle.border}`, backgroundColor: statusStyle.background }}
+      style={{
+        border: `2px ${isIsolated ? "dashed" : "solid"} ${statusStyle.border}`,
+        backgroundColor: statusStyle.background,
+      }}
       onClick={() => onSelect(individual.id)}
     >
+      {isIsolated && (
+        <span
+          className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--color-brand-100)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-brand-700)] shadow"
+          title="Cá thể này chưa có mối quan hệ nào trong cây gia phả này."
+        >
+          Chưa có mối quan hệ
+        </span>
+      )}
+
       {individual.siblingOrder !== undefined && (
         <span
           className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-brand-600)] text-xs font-semibold text-white shadow"

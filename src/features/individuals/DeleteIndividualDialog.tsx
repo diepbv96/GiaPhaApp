@@ -47,7 +47,8 @@ export function DeleteIndividualDialog({
         <>
           <p className="text-sm text-[var(--color-ink)]">
             Cá thể này đang có {relationshipCount} mối quan hệ. Xoá cá thể sẽ đồng thời xoá tất cả các
-            mối quan hệ liên quan. Hành động này không thể hoàn tác.
+            mối quan hệ liên quan và xoá cá thể này khỏi mọi cây gia phả mà họ thuộc về. Hành động này
+            không thể hoàn tác.
           </p>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -59,7 +60,9 @@ export function DeleteIndividualDialog({
           </label>
         </>
       ) : (
-        <p className="text-sm text-[var(--color-ink)]">Hành động này không thể hoàn tác.</p>
+        <p className="text-sm text-[var(--color-ink)]">
+          Cá thể này sẽ bị xoá khỏi mọi cây gia phả mà họ thuộc về. Hành động này không thể hoàn tác.
+        </p>
       )}
 
       {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
