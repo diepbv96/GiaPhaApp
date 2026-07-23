@@ -30,16 +30,18 @@ export const TreeCanvas = forwardRef<HTMLDivElement, TreeCanvasProps>(function T
   { graph, onSelectIndividual, canDrag = false, onNodePositionChange, hideInLaws = false, backgroundColor },
   ref,
 ) {
-  // 008-display-unconnected-individuals: every individual who is a member of this tree is
-  // rendered, regardless of whether they have any relationship recorded in this tree —
-  // isolatedIds only flags them (for IndividualNode's visual treatment), it never removes
-  // anyone from displayGraph.
-  const isolatedIds = useMemo(() => computeIsolatedIds(graph), [graph]);
-
   const displayGraph = useMemo<TreeGraph>(
     () => (hideInLaws ? filterOutInLaws(graph) : graph),
     [graph, hideInLaws],
   );
+
+  // 008-display-unconnected-individuals: every individual who is a member of this tree is
+  // rendered, regardless of whether they have any relationship recorded in this tree —
+  // isolatedIds only flags them (for IndividualNode's visual treatment), it never removes
+  // anyone from displayGraph. Computed from displayGraph (not the raw graph prop) so that
+  // anyone left with zero relationships as a side effect of the in-law cascade (spec 010)
+  // is flagged isolated instead of rendering as an inexplicably edge-less node.
+  const isolatedIds = useMemo(() => computeIsolatedIds(displayGraph), [displayGraph]);
 
   const { positions, unitIdOf, junctions } = useTreeLayout(displayGraph);
   const { hiddenIds, hasChildren, isCollapsed, toggle } = useExpandCollapse(displayGraph, unitIdOf);

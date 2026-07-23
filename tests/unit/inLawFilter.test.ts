@@ -47,4 +47,57 @@ describe("filterOutInLaws", () => {
     const result = filterOutInLaws(graph);
     expect(result.individuals.map((i) => i.id).sort()).toEqual(["daughter", "mother", "son"]);
   });
+
+  it("hides an in-law's exclusive child alongside the in-law (spec 010)", () => {
+    const graph: TreeGraph = {
+      individuals: [person("father"), person("son"), person("daughter-in-law"), person("stepchild")],
+      relationships: [
+        { id: "r1", familyTreeId: "t", type: "parent_child", personAId: "father", personBId: "son" },
+        { id: "r2", familyTreeId: "t", type: "spouse", personAId: "son", personBId: "daughter-in-law" },
+        { id: "r3", familyTreeId: "t", type: "parent_child", personAId: "daughter-in-law", personBId: "stepchild" },
+      ],
+    };
+
+    const result = filterOutInLaws(graph);
+    expect(result.individuals.map((i) => i.id).sort()).toEqual(["father", "son"]);
+    expect(result.relationships.map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("hides an in-law's exclusive grandchild transitively, in the same call (spec 010)", () => {
+    const graph: TreeGraph = {
+      individuals: [
+        person("father"),
+        person("son"),
+        person("daughter-in-law"),
+        person("stepchild"),
+        person("stepgrandchild"),
+      ],
+      relationships: [
+        { id: "r1", familyTreeId: "t", type: "parent_child", personAId: "father", personBId: "son" },
+        { id: "r2", familyTreeId: "t", type: "spouse", personAId: "son", personBId: "daughter-in-law" },
+        { id: "r3", familyTreeId: "t", type: "parent_child", personAId: "daughter-in-law", personBId: "stepchild" },
+        { id: "r4", familyTreeId: "t", type: "parent_child", personAId: "stepchild", personBId: "stepgrandchild" },
+      ],
+    };
+
+    const result = filterOutInLaws(graph);
+    expect(result.individuals.map((i) => i.id).sort()).toEqual(["father", "son"]);
+    expect(result.relationships.map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("keeps a child shared between an in-law and their blood-relative spouse (spec 010)", () => {
+    const graph: TreeGraph = {
+      individuals: [person("father"), person("son"), person("daughter-in-law"), person("sharedchild")],
+      relationships: [
+        { id: "r1", familyTreeId: "t", type: "parent_child", personAId: "father", personBId: "son" },
+        { id: "r2", familyTreeId: "t", type: "spouse", personAId: "son", personBId: "daughter-in-law" },
+        { id: "r3", familyTreeId: "t", type: "parent_child", personAId: "son", personBId: "sharedchild" },
+        { id: "r4", familyTreeId: "t", type: "parent_child", personAId: "daughter-in-law", personBId: "sharedchild" },
+      ],
+    };
+
+    const result = filterOutInLaws(graph);
+    expect(result.individuals.map((i) => i.id).sort()).toEqual(["father", "sharedchild", "son"]);
+    expect(result.relationships.map((r) => r.id).sort()).toEqual(["r1", "r3"]);
+  });
 });

@@ -421,3 +421,76 @@ test.describe("Spec 009 - Cross-tree relationship visibility", () => {
     await deleteIndividualEverywhere(page, nameF);
   });
 });
+
+// specs/010-hide-inlaw-relatives/quickstart.md
+//
+// Builds the exact scenario quickstart.md describes: a blood-line child of the seeded
+// "Bùi Văn Cha", that child's in-law spouse, the in-law's exclusive child and
+// grandchild, and a child shared between the couple. Creates and cleans up its own
+// individuals only, never touching seed fixtures beyond reading "Bùi Văn Cha" by name.
+async function createTypedRelationship(
+  page: Page,
+  type: "parent_child" | "spouse",
+  personAName: string,
+  personBName: string,
+) {
+  await page.getByText(personAName).first().click();
+  await page.getByRole("button", { name: "Thêm mối quan hệ" }).click();
+  await page.getByLabel("Loại quan hệ").selectOption(type);
+  const labelA = type === "parent_child" ? "Cha/Mẹ" : "Cá thể thứ nhất";
+  const labelB = type === "parent_child" ? "Con" : "Cá thể thứ hai";
+  await page.getByLabel(labelA).selectOption({ label: personAName });
+  await page.getByLabel(labelB).selectOption({ label: personBName });
+  await page.getByRole("button", { name: "Lưu" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+test.describe("Spec 010 - Cascade-hide in-law-only relatives", () => {
+  test("an in-law's exclusive descendants are hidden with the toggle, a shared child stays visible, and turning it off restores everyone", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTS.admin);
+
+    const son = "Playwright InLaw Son";
+    const spouse = "Playwright InLaw Spouse";
+    const stepchild = "Playwright InLaw Stepchild";
+    const stepgrandchild = "Playwright InLaw Stepgrandchild";
+    const sharedchild = "Playwright InLaw SharedChild";
+
+    for (const name of [son, spouse, stepchild, stepgrandchild, sharedchild]) {
+      await createIndividual(page, name);
+    }
+
+    await createTypedRelationship(page, "parent_child", "Bùi Văn Cha", son);
+    await createTypedRelationship(page, "spouse", son, spouse);
+    await createTypedRelationship(page, "parent_child", spouse, stepchild);
+    await createTypedRelationship(page, "parent_child", stepchild, stepgrandchild);
+    await createTypedRelationship(page, "parent_child", son, sharedchild);
+    await createTypedRelationship(page, "parent_child", spouse, sharedchild);
+
+    // Toggle off (default): everyone visible.
+    for (const name of [son, spouse, stepchild, stepgrandchild, sharedchild]) {
+      await expect(page.getByText(name)).toBeVisible();
+    }
+
+    // Enable "Ẩn dâu/rễ": the in-law and both of her exclusive descendants disappear;
+    // the shared child (a genuine blood descendant through `son`) stays visible.
+    await page.getByLabel("Ẩn dâu/rễ").check();
+    await expect(page.getByText(spouse)).toHaveCount(0);
+    await expect(page.getByText(stepchild)).toHaveCount(0);
+    await expect(page.getByText(stepgrandchild)).toHaveCount(0);
+    await expect(page.getByText(son)).toBeVisible();
+    await expect(page.getByText(sharedchild)).toBeVisible();
+
+    // Disable it again: hiding is purely visual — everyone reappears, no data lost.
+    await page.getByLabel("Ẩn dâu/rễ").uncheck();
+    for (const name of [son, spouse, stepchild, stepgrandchild, sharedchild]) {
+      await expect(page.getByText(name)).toBeVisible();
+    }
+
+    // Cleanup.
+    for (const name of [stepgrandchild, stepchild, sharedchild, spouse, son]) {
+      await deleteIndividualEverywhere(page, name);
+    }
+  });
+});
