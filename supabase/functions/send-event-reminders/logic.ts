@@ -6,6 +6,10 @@
 
 export type LifeEventType = "birthday" | "death_anniversary";
 
+/** "advance" = the configured days-before lead-time reminder (existing behavior);
+ * "due_today" = a second, separate reminder sent when the event occurs today. */
+export type ReminderStage = "advance" | "due_today";
+
 export interface PartialDateInput {
   value: string; // "YYYY-MM-DD"
   precision: "day" | "month" | "year" | "unknown";
@@ -36,6 +40,7 @@ export interface SentLogEntry {
   individualId: string;
   eventType: LifeEventType;
   eventYear: number;
+  reminderStage: ReminderStage;
 }
 
 export interface CalendarDate {
@@ -51,6 +56,7 @@ export interface DueReminder {
   eventYear: number;
   occurrence: CalendarDate;
   daysUntil: number;
+  reminderStage: ReminderStage;
   recipients: string[];
   message: string;
 }
@@ -103,15 +109,20 @@ function alreadySent(entry: SentLogEntry, log: SentLogEntry[]): boolean {
     (sent) =>
       sent.individualId === entry.individualId &&
       sent.eventType === entry.eventType &&
-      sent.eventYear === entry.eventYear,
+      sent.eventYear === entry.eventYear &&
+      sent.reminderStage === entry.reminderStage,
   );
 }
 
 /**
- * Computes which Life Event occurrences are due for a reminder right now: exactly
- * `config.daysBefore` days from `today`, not already recorded in `log` (spec
- * FR-012/FR-013). Returns `[]` immediately when `config.enabled` is `false` — the
- * caller (index.ts) is expected to take no further action for an empty result.
+ * Computes which Life Event occurrences are due for a reminder right now. Each
+ * occurrence can produce up to two independent reminders — "advance" (exactly
+ * `config.daysBefore` days from `today`, per spec FR-012/FR-013) and "due_today"
+ * (the event is today) — each deduped separately against `log` by its own
+ * `reminderStage`. When `config.daysBefore` is `0` only "due_today" fires, so the
+ * two stages never double-send for the same occurrence. Returns `[]` immediately
+ * when `config.enabled` is `false` — the caller (index.ts) is expected to take no
+ * further action for an empty result.
  */
 export function computeDueReminders(
   individuals: IndividualInput[],
@@ -131,33 +142,39 @@ export function computeDueReminders(
     const { month, day } = monthDayOf(date.value);
     const occurrence = nextOccurrence(month, day, today);
     const daysUntil = daysBetween(today, occurrence);
-    if (daysUntil !== config.daysBefore) return;
 
-    const entry: SentLogEntry = { individualId: individual.id, eventType: type, eventYear: occurrence.year };
-    if (alreadySent(entry, log)) return;
+    const stages: ReminderStage[] = [];
+    if (config.daysBefore > 0 && daysUntil === config.daysBefore) stages.push("advance");
+    if (daysUntil === 0) stages.push("due_today");
 
-    const recipients = resolveRecipients(individual.familyTreeId, config.defaultRecipients, overrides);
-    const gregorianLabel = `${occurrence.day}/${occurrence.month}/${occurrence.year}`;
-    const lunar = lunarLabel(occurrence);
+    for (const stage of stages) {
+      const entry: SentLogEntry = { individualId: individual.id, eventType: type, eventYear: occurrence.year, reminderStage: stage };
+      if (alreadySent(entry, log)) continue;
 
-    const message = renderTemplate(config.template, {
-      ten_ca_nhan: individual.fullName,
-      loai_su_kien: eventTypeLabel(type),
-      ngay_duong: gregorianLabel,
-      ngay_am: lunar ?? "không xác định",
-      so_ngay_con_lai: String(daysUntil),
-    });
+      const recipients = resolveRecipients(individual.familyTreeId, config.defaultRecipients, overrides);
+      const gregorianLabel = `${occurrence.day}/${occurrence.month}/${occurrence.year}`;
+      const lunar = lunarLabel(occurrence);
 
-    due.push({
-      individualId: individual.id,
-      fullName: individual.fullName,
-      eventType: type,
-      eventYear: occurrence.year,
-      occurrence,
-      daysUntil,
-      recipients,
-      message,
-    });
+      const message = renderTemplate(config.template, {
+        ten_ca_nhan: individual.fullName,
+        loai_su_kien: eventTypeLabel(type),
+        ngay_duong: gregorianLabel,
+        ngay_am: lunar ?? "không xác định",
+        so_ngay_con_lai: String(daysUntil),
+      });
+
+      due.push({
+        individualId: individual.id,
+        fullName: individual.fullName,
+        eventType: type,
+        eventYear: occurrence.year,
+        occurrence,
+        daysUntil,
+        reminderStage: stage,
+        recipients,
+        message,
+      });
+    }
   }
 
   for (const individual of individuals) {

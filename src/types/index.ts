@@ -70,6 +70,9 @@ export interface EventNotificationConfig {
   template: string;
   daysBefore: number;
   defaultRecipients: string[];
+  /** "HH:MM:SS", Asia/Ho_Chi_Minh wall-clock. Changes apply starting the next
+   * calendar day, not immediately (specs/011-email-template-schedule). */
+  dailySendTime: string;
 }
 
 export interface NotificationRecipientsOverride {

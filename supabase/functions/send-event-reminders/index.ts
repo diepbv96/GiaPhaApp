@@ -1,5 +1,7 @@
-// Daily-scheduled Edge Function: sends one reminder email per due, not-yet-sent Life
-// Event occurrence (spec FR-012/FR-013). See
+// Daily-scheduled Edge Function: sends a reminder email per due, not-yet-sent Life
+// Event occurrence (spec FR-012/FR-013) — up to two per occurrence, one "advance"
+// (days_before days ahead) and one "due_today" (the event is today); see
+// computeDueReminders in logic.ts. See
 // specs/002-lunar-events-tree-slugs/contracts/event-notification-config.md.
 //
 // Deployment: `supabase functions deploy send-event-reminders`. Daily scheduling is
@@ -75,7 +77,7 @@ Deno.serve(async () => {
     supabase
       .from("individuals")
       .select("id, full_name, family_tree_id, birth_date, birth_date_precision, is_deceased, death_date, death_date_precision"),
-    supabase.from("event_notification_log").select("individual_id, event_type, event_year"),
+    supabase.from("event_notification_log").select("individual_id, event_type, event_year, reminder_stage"),
   ]);
 
   if (configResult.error) throw configResult.error;
@@ -101,6 +103,7 @@ Deno.serve(async () => {
     individualId: row.individual_id as string,
     eventType: row.event_type as SentLogEntry["eventType"],
     eventYear: row.event_year as number,
+    reminderStage: row.reminder_stage as SentLogEntry["reminderStage"],
   }));
 
   const dueReminders = computeDueReminders(individuals, config, overrides, log, vietnamToday(), (date) => {
@@ -116,19 +119,18 @@ Deno.serve(async () => {
 
     try {
       if (resendApiKey && fromEmail) {
-        await sendEmail(
-          fromEmail,
-          resendApiKey,
-          reminder.recipients,
-          `Nhắc nhở: ${reminder.fullName} sắp có sự kiện`,
-          reminder.message,
-        );
+        const subject =
+          reminder.reminderStage === "due_today"
+            ? `Hôm nay: ${reminder.fullName} có sự kiện`
+            : `Nhắc nhở: ${reminder.fullName} sắp có sự kiện`;
+        await sendEmail(fromEmail, resendApiKey, reminder.recipients, subject, reminder.message);
       }
 
       const { error: insertError } = await supabase.from("event_notification_log").insert({
         individual_id: reminder.individualId,
         event_type: reminder.eventType,
         event_year: reminder.eventYear,
+        reminder_stage: reminder.reminderStage,
       });
       if (insertError) throw insertError;
 
@@ -137,7 +139,7 @@ Deno.serve(async () => {
       // Deliberately does not write a log row on failure — this occurrence is
       // naturally retried on tomorrow's run instead of being silently skipped
       // (contracts/event-notification-config.md "Failure handling").
-      failures.push(`${reminder.individualId}/${reminder.eventType}/${reminder.eventYear}: ${err}`);
+      failures.push(`${reminder.individualId}/${reminder.eventType}/${reminder.eventYear}/${reminder.reminderStage}: ${err}`);
     }
   }
 

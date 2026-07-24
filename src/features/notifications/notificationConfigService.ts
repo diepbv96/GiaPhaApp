@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { DataAccessError, type EventNotificationConfig, type NotificationRecipientsOverride } from "@/types";
 
 const CONFIG_ID = "00000000-0000-0000-0000-000000000000";
-const CONFIG_COLUMNS = "enabled, template, days_before, default_recipients";
+const CONFIG_COLUMNS = "enabled, template, days_before, default_recipients, daily_send_time";
 
 // Shown as a starting point whenever `template` is still "" (never configured — the
 // column's own DB default, indistinguishable from a deliberately-cleared value). Uses
@@ -16,6 +16,7 @@ interface EventNotificationConfigRow {
   template: string;
   days_before: number;
   default_recipients: string[];
+  daily_send_time: string;
 }
 
 interface NotificationRecipientsOverrideRow {
@@ -29,6 +30,7 @@ function mapConfigRow(row: EventNotificationConfigRow): EventNotificationConfig 
     template: row.template,
     daysBefore: row.days_before,
     defaultRecipients: row.default_recipients,
+    dailySendTime: row.daily_send_time,
   };
 }
 
@@ -54,7 +56,9 @@ export async function getConfig(): Promise<EventNotificationConfig> {
 }
 
 export async function updateConfig(
-  input: Partial<Pick<EventNotificationConfig, "enabled" | "template" | "daysBefore" | "defaultRecipients">>,
+  input: Partial<
+    Pick<EventNotificationConfig, "enabled" | "template" | "daysBefore" | "defaultRecipients" | "dailySendTime">
+  >,
   updatedBy: string,
 ): Promise<EventNotificationConfig> {
   const { data, error } = await supabase
@@ -64,6 +68,7 @@ export async function updateConfig(
       ...(input.template !== undefined ? { template: input.template } : {}),
       ...(input.daysBefore !== undefined ? { days_before: input.daysBefore } : {}),
       ...(input.defaultRecipients !== undefined ? { default_recipients: input.defaultRecipients } : {}),
+      ...(input.dailySendTime !== undefined ? { daily_send_time: input.dailySendTime } : {}),
       updated_by: updatedBy,
       updated_at: new Date().toISOString(),
     })

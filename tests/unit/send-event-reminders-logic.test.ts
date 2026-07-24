@@ -33,8 +33,41 @@ describe("computeDueReminders", () => {
     const due = computeDueReminders([person], baseConfig, [], [], today, noLunar);
 
     expect(due).toHaveLength(1);
-    expect(due[0]).toMatchObject({ individualId: "p1", eventType: "birthday", eventYear: 2026, daysUntil: 7 });
+    expect(due[0]).toMatchObject({
+      individualId: "p1",
+      eventType: "birthday",
+      eventYear: 2026,
+      daysUntil: 7,
+      reminderStage: "advance",
+    });
     expect(due[0].message).toContain("Bùi Văn A");
+  });
+
+  it("also flags a birthday that falls today, as a separate `due_today` reminder", () => {
+    const person = individual({ id: "p1", fullName: "Bùi Văn A", birthDate: { value: "1990-07-20", precision: "day" } });
+    const due = computeDueReminders([person], baseConfig, [], [], today, noLunar);
+
+    expect(due).toHaveLength(1);
+    expect(due[0]).toMatchObject({ individualId: "p1", eventType: "birthday", eventYear: 2026, daysUntil: 0, reminderStage: "due_today" });
+  });
+
+  it("sends both an advance and a due_today reminder independently once each becomes due, without double-sending", () => {
+    const person = individual({ id: "p1", fullName: "A", birthDate: { value: "1990-07-27", precision: "day" } });
+
+    const advanceDue = computeDueReminders([person], baseConfig, [], [], today, noLunar);
+    expect(advanceDue).toHaveLength(1);
+    expect(advanceDue[0].reminderStage).toBe("advance");
+
+    const advanceLog = [{ individualId: "p1", eventType: "birthday" as const, eventYear: 2026, reminderStage: "advance" as const }];
+
+    // Still 7 days out from the same log state -> already sent, nothing due.
+    expect(computeDueReminders([person], baseConfig, [], advanceLog, today, noLunar)).toEqual([]);
+
+    // Move forward to the day itself: the advance log entry doesn't block the due_today stage.
+    const eventDay = { year: 2026, month: 7, day: 27 };
+    const dueTodayDue = computeDueReminders([person], baseConfig, [], advanceLog, eventDay, noLunar);
+    expect(dueTodayDue).toHaveLength(1);
+    expect(dueTodayDue[0]).toMatchObject({ daysUntil: 0, reminderStage: "due_today" });
   });
 
   it("does not flag an event further away than the configured window", () => {
@@ -56,7 +89,7 @@ describe("computeDueReminders", () => {
 
   it("skips an occurrence already recorded in the log (no duplicate sends)", () => {
     const person = individual({ id: "p1", fullName: "A", birthDate: { value: "1990-07-27", precision: "day" } });
-    const log = [{ individualId: "p1", eventType: "birthday" as const, eventYear: 2026 }];
+    const log = [{ individualId: "p1", eventType: "birthday" as const, eventYear: 2026, reminderStage: "advance" as const }];
     const due = computeDueReminders([person], baseConfig, [], log, today, noLunar);
     expect(due).toEqual([]);
   });

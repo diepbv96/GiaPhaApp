@@ -58,51 +58,17 @@ backend — see `specs/001-family-tree-app/` for the full spec, plan, and design
 
 ## Event-reminder emails (Edge Function)
 
-`supabase/functions/send-event-reminders/` sends one reminder email per upcoming
-birthday/death-anniversary that falls within the configured lead time (default 7
-days) — see `specs/002-lunar-events-tree-slugs/`. It's the only server-side code in
-this project; everything else is the frontend talking directly to Supabase.
+`supabase/functions/send-event-reminders/` sends up to two reminder emails per
+upcoming birthday/death-anniversary: an "advance" reminder at the configured lead
+time (default 7 days) and a separate "due_today" reminder on the day the event
+actually occurs — see `specs/002-lunar-events-tree-slugs/` and
+`computeDueReminders` in `logic.ts`. It's the only server-side code in this
+project; everything else is the frontend talking directly to Supabase.
 
-**One-time setup** (after applying migrations `0013`–`0015`, e.g. via `supabase db
-push` or `bootstrap.sql`):
-
-1. Deploy the function:
-
-   ```bash
-   supabase functions deploy send-event-reminders
-   ```
-
-2. Set its secrets (copy `supabase/functions/send-event-reminders/.env.example` to a
-   local `.env` first, fill in real values, then run):
-
-   ```bash
-   supabase secrets set --env-file supabase/functions/send-event-reminders/.env
-   ```
-
-   - `RESEND_API_KEY` — from [resend.com](https://resend.com); without it (or without
-     `EVENT_REMINDER_FROM_EMAIL`), the function still runs and logs sends but skips
-     the actual email `fetch` call, so it's safe to deploy before you have a provider.
-   - `EVENT_REMINDER_FROM_EMAIL` — must be a verified sender/domain in Resend.
-   - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the
-     Edge Function runtime — never set these yourself.
-
-3. Schedule it: migration `0020_schedule_event_reminders_cron.sql` sets up a
-   `pg_cron` + `pg_net` job that calls the function daily at 06:00 Asia/Ho_Chi_Minh
-   (23:00 UTC). It has one manual prerequisite per project — create two Vault
-   secrets (Dashboard → **Project Settings** → **Vault**, or SQL):
-
-   ```sql
-   select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
-   select vault.create_secret('<service_role_key>', 'service_role_key');
-   ```
-
-   Apply the migration (`supabase db push`) after the secrets exist. Verify with
-   `select * from cron.job;` and `select * from cron.job_run_details order by
-   start_time desc limit 5;`.
-
-4. Turn reminders on: sign in as Admin → sidebar → **Cấu hình thông báo** → enable,
-   set the template/lead time/recipients, save. The function itself checks this
-   config on every run and does nothing while it's disabled.
+For the full setup — provider account, deploying the function, the daily
+schedule (including the Admin-configurable send time), and configuring
+templates/recipients from the Admin screen — see
+**[docs/event-notification-setup.md](docs/event-notification-setup.md)**.
 
 ## Scripts
 

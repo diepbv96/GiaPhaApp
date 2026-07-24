@@ -8,12 +8,15 @@ import {
   setRecipientOverride,
   updateConfig,
 } from "@/features/notifications/notificationConfigService";
+import { PREDEFINED_EMAIL_TEMPLATES } from "@/features/notifications/predefinedTemplates";
+import { BIRTHDAY_PREVIEW_SAMPLE, DEATH_ANNIVERSARY_PREVIEW_SAMPLE, renderPreview } from "@/features/notifications/renderPreview";
 import { getFamilyTrees } from "@/features/trees/treeService";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useToast } from "@/app/ToastProvider";
 import type { EventNotificationConfig, FamilyTreeSummary } from "@/types";
 
 const DEFAULT_DAYS_BEFORE = 7;
+const DEFAULT_DAILY_SEND_TIME = "06:00";
 
 function parseRecipients(text: string): string[] {
   return Array.from(
@@ -40,11 +43,19 @@ function ConfigForm({ config }: { config: EventNotificationConfig }) {
   );
   const [daysBefore, setDaysBefore] = useState(config.daysBefore);
   const [defaultRecipientsText, setDefaultRecipientsText] = useState(config.defaultRecipients.join("\n"));
+  // "HH:MM:SS" -> "HH:MM" for the <input type="time"> value.
+  const [dailySendTime, setDailySendTime] = useState(config.dailySendTime.slice(0, 5));
 
   const saveMutation = useMutation({
     mutationFn: () =>
       updateConfig(
-        { enabled, template, daysBefore, defaultRecipients: parseRecipients(defaultRecipientsText) },
+        {
+          enabled,
+          template,
+          daysBefore,
+          defaultRecipients: parseRecipients(defaultRecipientsText),
+          dailySendTime,
+        },
         session!.user.id,
       ),
     onSuccess: () => {
@@ -90,6 +101,48 @@ function ConfigForm({ config }: { config: EventNotificationConfig }) {
       </div>
 
       <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="notif-daily-send-time">
+          Giờ gửi email hằng ngày
+        </label>
+        <input
+          id="notif-daily-send-time"
+          type="time"
+          value={dailySendTime}
+          onChange={(event) => setDailySendTime(event.target.value)}
+          className="w-32 rounded-lg border border-gray-300 px-3 py-2"
+        />
+        <p className="mt-1 text-xs text-[var(--color-ink-muted)]">
+          Mặc định là {DEFAULT_DAILY_SEND_TIME} (giờ Việt Nam). Giờ mới sẽ áp dụng từ ngày mai, không ảnh hưởng đến lượt
+          gửi của hôm nay.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium" htmlFor="notif-template-picker">
+          Chọn mẫu có sẵn
+        </label>
+        <select
+          id="notif-template-picker"
+          value=""
+          onChange={(event) => {
+            const chosen = PREDEFINED_EMAIL_TEMPLATES.find((entry) => entry.id === event.target.value);
+            if (chosen) setTemplate(chosen.content);
+          }}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        >
+          <option value="">— Chọn một mẫu để điền vào ô dưới —</option>
+          {PREDEFINED_EMAIL_TEMPLATES.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-[var(--color-ink-muted)]">
+          Chọn một mẫu để điền vào nội dung email bên dưới — bạn vẫn có thể sửa lại sau khi chọn.
+        </p>
+      </div>
+
+      <div>
         <label className="mb-1 block text-sm font-medium" htmlFor="notif-template">
           Nội dung email mẫu
         </label>
@@ -101,6 +154,18 @@ function ConfigForm({ config }: { config: EventNotificationConfig }) {
           className="w-full rounded-lg border border-gray-300 px-3 py-2"
           placeholder="VD: {{ten_ca_nhan}} sẽ có {{loai_su_kien}} vào ngày {{ngay_duong}} ({{ngay_am}})."
         />
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[var(--color-brand-100)] p-3">
+        <p className="text-sm font-medium text-[var(--color-ink)]">Xem trước</p>
+        <div>
+          <p className="text-xs font-medium text-[var(--color-ink-muted)]">Sinh nhật</p>
+          <p className="text-sm text-[var(--color-ink)]">{renderPreview(template, BIRTHDAY_PREVIEW_SAMPLE)}</p>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-[var(--color-ink-muted)]">Ngày giỗ</p>
+          <p className="text-sm text-[var(--color-ink)]">{renderPreview(template, DEATH_ANNIVERSARY_PREVIEW_SAMPLE)}</p>
+        </div>
       </div>
 
       <div>
